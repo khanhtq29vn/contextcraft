@@ -3,7 +3,8 @@
 project = "ContextCraft"
 author = "ContextCraft Contributors"
 
-extensions = ["myst_parser", "sphinxcontrib.katex"]
+extensions = ["myst_parser", "sphinxcontrib.katex", "sphinx.ext.autodoc"]
+autodoc_typehints = "signature"
 myst_enable_extensions = ["dollarmath"]
 
 html_theme = "furo"
