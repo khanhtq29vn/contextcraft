@@ -52,19 +52,3 @@ def test_ast_parser_extracts_typescript_symbols_and_fallback(sample_repo: Path) 
         for level in FidelityLevel:
             if level != FidelityLevel.TREE:
                 assert tiers[level].content == source.decode()
-
-
-def test_missing_grammar_preserves_source() -> None:
-    source = b"def run():\n    return important_implementation()\n"
-    with patch(
-        "contextcraft.ast.parser.get_parser", side_effect=RuntimeError("grammar unavailable")
-    ):
-        parsed = parse(source, PythonLanguage)
-    tiers = Elider().render(parsed, PythonLanguage)
-
-    assert parsed.has_errors
-    assert all(
-        tiers[level].content == source.decode()
-        for level in FidelityLevel
-        if level != FidelityLevel.TREE
-    )

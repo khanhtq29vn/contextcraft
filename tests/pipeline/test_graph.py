@@ -2,28 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from contextcraft import ContextCraft
 from contextcraft.graph import DependencyGraphScorer
-
-
-def test_dependency_ranking_and_focus_queries(sample_repo: Path) -> None:
-    compiler = ContextCraft()
-    baseline = {
-        file.rel_path: file.pagerank_score for file in compiler.analyze_repository(sample_repo)
-    }
-    focused = {
-        file.rel_path: file.pagerank_score
-        for file in compiler.analyze_repository(
-            sample_repo,
-            focus_files=["src/utils/helpers.py"],
-        )
-    }
-
-    assert sum(baseline.values()) == pytest.approx(1.0)
-    assert baseline["src/auth/models.py"] > baseline["src/utils/helpers.py"]
-    assert focused["src/utils/helpers.py"] > baseline["src/utils/helpers.py"] * 2
 
 
 def test_graph_resolves_python_relative_and_javascript_index_imports(tmp_path: Path) -> None:

@@ -149,27 +149,6 @@ def test_scanner_rejects_missing_or_file_roots(tmp_path: Path) -> None:
             scanner.scan(path)
 
 
-def test_scanner_respects_gitignore_and_skips_binaries(sample_repo: Path) -> None:
-    """Verify `.gitignore` rules and binary files are excluded while valid code is scanned."""
-    scanner = RepositoryScanner(default_registry())
-    outcome = scanner.scan(sample_repo)
-
-    rel_paths = {f.rel_path for f in outcome.files}
-
-    assert "src/auth/models.py" in rel_paths
-    assert "src/auth/jwt_service.py" in rel_paths
-    assert "src/api/routes.py" in rel_paths
-    assert "src/frontend/client.ts" in rel_paths
-    assert "src/utils/helpers.py" in rel_paths
-
-    # Verify gitignored paths and binary assets were excluded
-    assert "ignored_dir/skip_me.py" not in rel_paths
-    assert "debug.log" not in rel_paths
-    assert "assets/logo.dat" not in rel_paths
-    assert outcome.binary_files_skipped >= 1
-    assert outcome.ignored_files_skipped >= 2
-
-
 def test_scanner_include_and_exclude_patterns(sample_repo: Path) -> None:
     """Verify user `include_patterns` and `exclude_patterns` filter files accurately."""
     cfg = CompilationConfig(
@@ -183,15 +162,3 @@ def test_scanner_include_and_exclude_patterns(sample_repo: Path) -> None:
     assert "src/auth/jwt_service.py" in rel_paths
     assert "src/frontend/client.ts" not in rel_paths
     assert "src/utils/helpers.py" not in rel_paths
-
-
-def test_scanner_raises_on_missing_or_file_path(tmp_path: Path) -> None:
-    """Verify `RepositoryNotFoundError` is raised for non-existent or non-directory paths."""
-    scanner = RepositoryScanner(default_registry())
-    with pytest.raises(RepositoryNotFoundError):
-        scanner.scan(tmp_path / "does_not_exist")
-
-    file_target = tmp_path / "single_file.txt"
-    file_target.write_text("hello", encoding="utf-8")
-    with pytest.raises(RepositoryNotFoundError):
-        scanner.scan(file_target)

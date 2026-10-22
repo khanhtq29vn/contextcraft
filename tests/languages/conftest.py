@@ -131,5 +131,10 @@ def language_case(request: pytest.FixtureRequest) -> tuple[str, str, bytes, str,
 
 
 @pytest.fixture
+def language_files() -> dict[str, tuple[str, bytes]]:
+    return {path: (language_id, source) for language_id, path, source, _, _ in LANGUAGE_CASES}
+
+
+@pytest.fixture
 def language_sources() -> dict[str, bytes]:
     return {language_id: source for language_id, _, source, _, _ in LANGUAGE_CASES}

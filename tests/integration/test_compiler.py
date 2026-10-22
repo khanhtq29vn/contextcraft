@@ -47,6 +47,13 @@ def test_sdk_end_to_end_markdown_xml_and_json(sample_repo: Path) -> None:
     assert isinstance(payload["files"], list)
 
 
+def test_focused_compilation_stays_within_budget(sample_repo: Path) -> None:
+    result = ContextCraft(budget_tokens=800, focus_query="JWT verify_token").compile(sample_repo)
+
+    assert result.stats.compressed_tokens == TokenCounter().count(result.content) <= 800
+    assert result.stats.budget_tokens == 800
+
+
 @pytest.mark.parametrize("fmt", ["markdown", "xml", "json"])
 @pytest.mark.parametrize("budget", [30, 180, 450, 800, 2000, 5000])
 def test_compiler_respects_real_emitted_token_budgets(
@@ -166,16 +173,3 @@ def test_empty_repository_and_single_file(tmp_path: Path) -> None:
 
     assert result.files[0].pagerank_score == 1.0
     assert result.files[0].selected_fidelity == FidelityLevel.FULL
-
-
-@pytest.mark.parametrize("budget", [180, 450, 800, 1400, 5000])
-def test_knapsack_optimizer_strictly_respects_all_token_budgets(
-    sample_repo: Path,
-    budget: int,
-) -> None:
-    """Verify compiled output never exceeds `budget_tokens` across tight and generous budgets."""
-    cc = ContextCraft(budget_tokens=budget, focus_query="JWT verify_token")
-    result = cc.compile(sample_repo)
-
-    assert result.stats.compressed_tokens <= budget
-    assert result.stats.budget_tokens == budget

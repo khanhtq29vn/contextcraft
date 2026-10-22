@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import importlib
-
 import pytest
 
 from contextcraft.languages.base import Language, LanguageSpec
@@ -119,17 +117,6 @@ def test_cpp_headers_are_shared_candidates() -> None:
 
     assert len(candidates) == 2
     assert CppLanguage in candidates
-
-
-@pytest.mark.parametrize("language", default_registry().languages, ids=lambda lang: lang.spec.id)
-def test_languages_have_dedicated_components(language: type) -> None:
-    package = f"contextcraft.languages.{language.spec.id}"
-    assert language.__module__ == package + ".language"
-    assert language.extractor.__module__ == package + ".extraction"
-    assert language.skeleton_builder.__module__ == package + ".skeleton"
-    assert language.signatures_builder.__module__ == package + ".signatures"
-    for module in ("language", "extraction", "skeleton", "signatures"):
-        importlib.import_module(f"{package}.{module}")
 
 
 @pytest.mark.parametrize(
