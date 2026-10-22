@@ -14,7 +14,7 @@ git clone https://github.com/<your-username>/contextcraft.git
 cd contextcraft
 
 # 2. Create the virtual environment and install all dependencies (core + web + dev)
-uv sync --all-extras --dev
+uv sync --locked --all-extras --dev
 
 # 3. Install pre-commit hooks
 uv run pre-commit install

@@ -18,7 +18,6 @@ from contextcraft.models import (
     RepositoryNotFoundError,
     SecretKind,
     SecretMatch,
-    SymbolKind,
     SymbolNode,
 )
 
@@ -40,7 +39,6 @@ __all__ = [
     "RepositoryNotFoundError",
     "SecretKind",
     "SecretMatch",
-    "SymbolKind",
     "SymbolNode",
     "__version__",
 ]

@@ -17,7 +17,8 @@ from __future__ import annotations
 import re
 from typing import Any, ClassVar
 
-from contextcraft.models import ByteRange, FidelityLevel, FileAnalysis, SymbolKind, SymbolNode
+from contextcraft.languages import get_extractor
+from contextcraft.models import ByteRange, FidelityLevel, FileAnalysis, SymbolNode
 
 try:
     import tiktoken
@@ -32,9 +33,7 @@ class TokenCounter:
     """Fast, cached token counter using `tiktoken` with deterministic offline fallback."""
 
     _ENCODERS: ClassVar[dict[str, Any]] = {}
-    _FALLBACK_TOKEN_RE: ClassVar[re.Pattern[str]] = re.compile(
-        r"[A-Za-z0-9_]+|[^\sA-Za-z0-9_]"
-    )
+    _FALLBACK_TOKEN_RE: ClassVar[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_]+|[^\sA-Za-z0-9_]")
 
     def __init__(self, encoding_name: str = "cl100k_base") -> None:
         """Initialize the counter with the requested BPE encoding name."""
@@ -136,26 +135,27 @@ class MultiResolutionElider:
 
         elidable_ranges = cls._collect_non_overlapping_body_ranges(file_obj.symbols)
         if not elidable_ranges:
-            return cls._render_non_ast_skeleton(file_obj, full_text)
+            return full_text
 
         raw_bytes = source.encode("utf-8")
-        lines = source.splitlines()
+        extractor = get_extractor(file_obj.language)
         buffer = bytearray(raw_bytes)
 
         # Replace implementation bodies in reverse byte order so earlier byte offsets never shift!
         for span in sorted(elidable_ranges, key=lambda r: r.start_byte, reverse=True):
-            if span.start_byte < 0 or span.end_byte > len(buffer) or span.start_byte >= span.end_byte:
+            if (
+                span.start_byte < 0
+                or span.end_byte > len(buffer)
+                or span.start_byte >= span.end_byte
+            ):
                 continue
 
-            replacement_str = cls._build_elision_marker(
-                language=file_obj.language,
-                span=span,
-                lines=lines,
-            )
+            replacement_str = extractor.elision_marker(span)
             buffer[span.start_byte : span.end_byte] = replacement_str.encode("utf-8")
 
         elided_text = buffer.decode("utf-8", errors="replace").strip()
-        elided_text = cls._BLANK_LINES_RE.sub("\n\n", elided_text)
+        if not extractor.PRESERVE_WHITESPACE:
+            elided_text = cls._BLANK_LINES_RE.sub("\n\n", elided_text)
         return f"{elided_text}\n" if elided_text else full_text
 
     @classmethod
@@ -165,8 +165,13 @@ class MultiResolutionElider:
         skeleton_fallback: str,
     ) -> str:
         """Render `FidelityLevel.SIGNATURES_ONLY` containing imports and public declarations."""
+        extractor = get_extractor(file_obj.language)
+        outline = extractor.render_signatures(file_obj.sanitized_content, file_obj.symbols)
+        if outline is not None:
+            return outline
+
         if not file_obj.symbols:
-            return cls._render_non_ast_signatures(file_obj, skeleton_fallback)
+            return skeleton_fallback
 
         output_lines: list[str] = []
 
@@ -194,35 +199,18 @@ class MultiResolutionElider:
             for dec in sym.decorators:
                 output_lines.append(f"{indent}{dec}")
 
-            clean_sig = " ".join(sym.signature.split())
-            if file_obj.language == "python":
-                if sym.kind in {SymbolKind.CLASS, SymbolKind.ENUM}:
-                    output_lines.append(f"{indent}{clean_sig}:")
-                else:
-                    output_lines.append(f"{indent}{clean_sig}: ...")
-            else:
-                if sym.kind in {
-                    SymbolKind.CLASS,
-                    SymbolKind.INTERFACE,
-                    SymbolKind.STRUCT,
-                    SymbolKind.ENUM,
-                }:
-                    output_lines.append(f"{indent}{clean_sig} {{ ... }}")
-                else:
-                    output_lines.append(f"{indent}{clean_sig};")
+            output_lines.append(f"{indent}{extractor.render_signature(sym)}")
 
         rendered = "\n".join(output_lines).strip()
         return f"{rendered}\n" if rendered else skeleton_fallback
 
     @staticmethod
     def _collect_non_overlapping_body_ranges(symbols: list[SymbolNode]) -> list[ByteRange]:
-        """Return outermost non-overlapping `body_range` spans for functions and methods."""
+        """Return outermost non-overlapping language-selected elision spans."""
         candidates = [
             sym.body_range
             for sym in symbols
-            if sym.body_range is not None
-            and sym.kind in {SymbolKind.FUNCTION, SymbolKind.METHOD}
-            and sym.body_range.byte_length > 16
+            if sym.body_range is not None and sym.body_range.byte_length > 16
         ]
         if not candidates:
             return []
@@ -243,55 +231,3 @@ class MultiResolutionElider:
                 accepted.append(span)
 
         return accepted
-
-    @staticmethod
-    def _build_elision_marker(
-        *,
-        language: str,
-        span: ByteRange,
-        lines: list[str],
-    ) -> str:
-        """Create a syntactically valid replacement stub for an elided function body."""
-        line_count = span.line_count
-        if language == "python":
-            return f"...  # [elided {line_count} lines]"
-
-        # Determine base indentation of the declaration line for clean brace alignment
-        decl_idx = max(0, min(span.start_line - 1, len(lines) - 1))
-        decl_line = lines[decl_idx] if lines else ""
-        ws_len = len(decl_line) - len(decl_line.lstrip(" \t"))
-        _ = decl_line[:ws_len]
-        return f"{{ /* ... elided {line_count} lines ... */ }}"
-
-    @staticmethod
-    def _render_non_ast_skeleton(file_obj: FileAnalysis, full_text: str) -> str:
-        """Produce a concise structural skeleton for Markdown, JSON, YAML, or TOML files."""
-        lines = full_text.splitlines()
-        if len(lines) <= 25:
-            return full_text
-
-        if file_obj.language == "markdown":
-            kept: list[str] = []
-            for idx, line in enumerate(lines):
-                stripped = line.strip()
-                if stripped.startswith("#") or idx < 8 or stripped.startswith(("- **", "* **")):
-                    kept.append(line)
-            kept.append(f"\n<!-- ... [elided {len(lines) - len(kept)} prose lines] ... -->\n")
-            return "\n".join(kept)
-
-        head = "\n".join(lines[:20])
-        return f"{head}\n# ... [elided {len(lines) - 20} lines] ...\n"
-
-    @staticmethod
-    def _render_non_ast_signatures(file_obj: FileAnalysis, skeleton_fallback: str) -> str:
-        """Produce a minimal header summary for non-code files at Tier 1."""
-        lines = skeleton_fallback.splitlines()
-        if len(lines) <= 10:
-            return skeleton_fallback
-
-        if file_obj.language == "markdown":
-            headings = [line for line in lines if line.strip().startswith("#")]
-            if headings:
-                return "\n".join(headings[:12]) + "\n"
-
-        return "\n".join(lines[:10]) + "\n"

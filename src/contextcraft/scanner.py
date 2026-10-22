@@ -225,7 +225,7 @@ class RepositoryScanner:
         ".html": "html",
         ".htm": "html",
         ".css": "css",
-        ".scss": "css",
+        ".scss": "scss",
         ".proto": "protobuf",
         ".graphql": "graphql",
         ".gql": "graphql",

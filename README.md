@@ -43,7 +43,9 @@ cc = ContextCraft(budget_tokens="16k")
 result = cc.compile("./my-repo", focus_query="authentication middleware")
 
 print(result.markdown)
-print(f"Compression: {result.stats.compression_ratio}x ({result.stats.compressed_tokens} / {result.stats.budget_tokens} tokens)")
+print(
+    f"Compression: {result.stats.compression_ratio}x ({result.stats.compressed_tokens} / {result.stats.budget_tokens} tokens)"
+)
 ```
 
 ### 3. Interactive Web Playground & "URL Swap Trick"
@@ -113,7 +115,7 @@ Evaluated using `benchmarks/run_benchmark.py` (`--focus "AST elision knapsack op
 
 ```bash
 # Install all dependencies (core, web, and dev)
-uv sync --all-extras --dev
+uv sync --locked --all-extras --dev
 
 # Run lint, strict type checking, and test coverage
 uv run ruff check src tests web benchmarks

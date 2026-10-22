@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum, IntEnum
-from typing import Any
+from typing import Any, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -107,22 +107,6 @@ class FidelityLevel(IntEnum):
         return utilities[self]
 
 
-class SymbolKind(StrEnum):
-    """Canonical AST symbol categories across programming languages."""
-
-    CLASS = "class"
-    FUNCTION = "function"
-    METHOD = "method"
-    INTERFACE = "interface"
-    STRUCT = "struct"
-    ENUM = "enum"
-    TYPE_ALIAS = "type_alias"
-    VARIABLE = "variable"
-    CONSTANT = "constant"
-    MODULE = "module"
-    IMPORT = "import"
-
-
 class OutputFormat(StrEnum):
     """Supported target output formats for compiled repository context."""
 
@@ -206,30 +190,37 @@ class SymbolNode(BaseModel):
     qualified_name: str | None = Field(
         default=None, description="Fully scoped symbol name (e.g., 'AuthService.verify_token')."
     )
-    kind: SymbolKind
+    kind: str = Field(min_length=1, description="Language-defined symbol category.")
     signature: str = Field(
         description="Clean header/declaration line(s) including type annotations."
     )
     docstring: str | None = Field(
         default=None, description="Extracted docstring or preceding doc-comment block."
     )
-    full_range: ByteRange = Field(
-        description="Byte/line span of the entire symbol definition."
-    )
+    full_range: ByteRange = Field(description="Byte/line span of the entire symbol definition.")
     body_range: ByteRange | None = Field(
         default=None,
-        description="Byte/line span of the implementation body to be elided in Tier 2.",
+        description="Language-selected byte/line span to elide in Tier 2.",
     )
     is_exported: bool = Field(
         default=True,
         description="False for private/internal symbols (e.g., leading underscore).",
     )
     parent_symbol: str | None = Field(
-        default=None, description="Enclosing class, struct, or module name if nested."
+        default=None, description="Qualified enclosing scope name if nested."
     )
     decorators: list[str] = Field(
         default_factory=list, description="Attached decorators or attributes."
     )
+
+
+class ASTParseResult(NamedTuple):
+    """Structural analysis of a single source file."""
+
+    symbols: list[SymbolNode]
+    imports: list[str]
+    defined_identifiers: list[str]
+    referenced_identifiers: list[str]
 
 
 # ============================================================================
@@ -244,7 +235,9 @@ class FileAnalysis(BaseModel):
 
     rel_path: str = Field(description="POSIX-normalized path relative to repository root.")
     abs_path: str = Field(description="Resolved absolute filesystem path.")
-    language: str = Field(description="Canonical language identifier (e.g., 'python', 'typescript').")
+    language: str = Field(
+        description="Canonical language identifier (e.g., 'python', 'typescript')."
+    )
     size_bytes: int = Field(ge=0)
     raw_content: str = Field(repr=False)
     sanitized_content: str = Field(repr=False)
