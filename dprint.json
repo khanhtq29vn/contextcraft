@@ -1,0 +1,33 @@
+{
+  "json": {},
+  "markdown": {},
+  "markup": {},
+  "yaml": {},
+  "exec": {
+    "cwd": "${configDir}",
+    "commands": [
+      {
+        "command": "uv run --locked ruff format --stdin-filename \"{{file_path}}\" -",
+        "exts": [
+          "py",
+          "pyi"
+        ],
+        "cacheKeyFiles": [
+          "pyproject.toml",
+          "uv.lock"
+        ]
+      }
+    ]
+  },
+  "excludes": [
+    "uv.lock"
+  ],
+  "plugins": [
+    "npm:@dprint/json@0.25.2",
+    "npm:@dprint/markdown@0.28.0",
+    "npm:dprint-plugin-markup@0.27.6",
+    "npm:dprint-plugin-yaml@0.6.0",
+    "npm:@dprint/exec@0.8.0/plugin.json@9d6234ea05810c775f388c2a4cce82b9116b69294b65e0e1e9d64f1446283ef3",
+    "npm:@dprint/toml@0.9.0"
+  ]
+}
