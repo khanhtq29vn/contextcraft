@@ -19,8 +19,9 @@ from contextcraft.models import (
     SecretKind,
     SecretMatch,
 )
+from contextcraft.utils import get_version
 
-__version__ = "0.2.0"
+__version__ = get_version()
 
 __all__ = [
     "ASTParseError",
