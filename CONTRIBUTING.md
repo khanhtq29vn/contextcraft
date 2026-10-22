@@ -39,6 +39,22 @@ uv run pytest --cov=contextcraft --cov-report=term-missing
 
 ---
 
+## Documentation
+
+The documentation uses Sphinx, Furo, and MyST Markdown. After installing the development dependencies, preview it with live reload:
+
+```bash
+uv run --locked sphinx-autobuild -b dirhtml docs docs/_build/html
+```
+
+Open <http://127.0.0.1:8000>. To build with warnings treated as errors:
+
+```bash
+uv run --locked sphinx-build -W --keep-going -b dirhtml docs docs/_build/html
+```
+
+---
+
 ## 3. High-Impact Ways to Contribute
 
 1. **Adding or Enhancing Language Support (`src/contextcraft/scanner.py` & `ast_parser.py`):**

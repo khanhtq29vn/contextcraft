@@ -50,6 +50,7 @@ context_output.json
 
 # Documentation build
 site/
+docs/_build/
 
 # JetBrains PyCharm (Ignore workspace state, keep shared runConfigurations)
 .idea/*

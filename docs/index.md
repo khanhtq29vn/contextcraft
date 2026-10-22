@@ -20,3 +20,11 @@ cc = ContextCraft(budget_tokens="32k")
 result = cc.compile("./my-repo", focus_query="AST elision and knapsack optimizer")
 print(result.markdown)
 ```
+
+```{toctree}
+:maxdepth: 2
+:caption: Contents
+
+architecture
+api-reference
+```

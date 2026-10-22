@@ -33,13 +33,13 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Build MkDocs Material site
-        run: uv run mkdocs build --strict
+      - name: Build Sphinx documentation
+        run: uv run --locked sphinx-build -W --keep-going -b dirhtml docs docs/_build/html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: docs/_build/html
 
       - name: Deploy to GitHub Pages
         id: deployment
