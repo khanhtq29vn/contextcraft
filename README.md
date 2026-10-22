@@ -6,7 +6,7 @@
 
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/contextcraft/contextcraft/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![PyPI](https://img.shields.io/pypi/v/contextcraft-ai.svg)](https://pypi.org/project/contextcraft-ai/)
+[![PyPI](https://img.shields.io/pypi/v/contextcraft.svg)](https://pypi.org/project/contextcraft-ai/)
 [![Typed: mypy strict](https://img.shields.io/badge/typing-mypy%20--strict-indigo.svg)](https://mypy-lang.org/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
