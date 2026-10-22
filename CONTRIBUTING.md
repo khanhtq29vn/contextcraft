@@ -73,3 +73,21 @@ uv run --locked sphinx-build -W --keep-going -b dirhtml docs docs/_build/html
 2. Add unit tests in `tests/` covering your new functionality.
 3. Commit using [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat(ast): add Rust trait signature extraction`).
 4. Push to your fork and open a Pull Request against `main`.
+
+---
+
+## Releases
+
+[Release Please](https://github.com/googleapis/release-please) opens or updates a release PR after pushes to `main`. It determines the next version from Conventional Commits:
+
+- `fix:` and `perf:` produce patch releases.
+- `feat:` produces minor releases.
+- `BREAKING CHANGE:` footers or `!` produce minor releases while the version is `0.x`, and major releases after `1.0`.
+
+The release PR updates `pyproject.toml`, `src/contextcraft/__init__.py`, `uv.lock`, `CHANGELOG.md`, and `.release-please-manifest.json`. Review it, wait for CI to pass, then merge it. The next workflow run creates a `v`-prefixed tag and a GitHub release. Use a conventional squash-merge title for normal PRs, and preserve the generated title and body when merging release PRs.
+
+The manifest starts at the existing `v0.1.0` release. The configuration's `bootstrap-sha` limits the first release's commit history to changes after that tag; Release Please ignores it after the first release PR is merged.
+
+### PyPI publishing
+
+GitHub releases do not publish to PyPI automatically. To publish an existing release, manually run **Actions → Publish to PyPI → Run workflow** from `main` and enter its tag, such as `v0.2.0`. The workflow builds that tag and uses the existing `pypi` environment and Trusted Publishing setup.
