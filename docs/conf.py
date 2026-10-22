@@ -9,7 +9,7 @@ myst_enable_extensions = ["dollarmath"]
 html_theme = "furo"
 html_title = "ContextCraft Documentation"
 html_theme_options = {
-    "source_repository": "https://github.com/contextcraft/contextcraft/",
+    "source_repository": "https://github.com/khanhtq29vn/contextcraft/",
     "source_branch": "main",
     "source_directory": "docs/",
 }
