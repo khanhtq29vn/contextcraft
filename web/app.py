@@ -26,6 +26,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import select_autoescape
 from pydantic import BaseModel, Field
 
 from contextcraft import (
@@ -38,6 +39,7 @@ from contextcraft import (
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+templates.env.autoescape = select_autoescape(("html", "htm", "xml", "jinja"))
 
 _GITHUB_URL_RE = re.compile(
     r"^(?:https?://)?(?:www\.)?github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?/?$"
@@ -118,7 +120,7 @@ def index_page(
     """Render the interactive ContextCraft Web Playground."""
     return templates.TemplateResponse(
         request=request,
-        name="index.html",
+        name="index.jinja",
         context={
             "version": __version__,
             "initial_source": source,
@@ -231,7 +233,7 @@ def github_url_swap_page(
     github_url = f"https://github.com/{owner}/{repo}"
     return templates.TemplateResponse(
         request=request,
-        name="index.html",
+        name="index.jinja",
         context={
             "version": __version__,
             "initial_source": github_url,

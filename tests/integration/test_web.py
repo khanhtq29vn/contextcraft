@@ -29,6 +29,15 @@ def test_web_health_and_index_page() -> None:
     assert "ContextCraft" in index_resp.text
 
 
+def test_web_template_escapes_user_input() -> None:
+    payload = '"><script>alert(1)</script>'
+    response = client.get("/", params={"source": payload})
+
+    assert response.status_code == 200
+    assert payload not in response.text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
+
+
 def test_web_api_compile_local_repository(sample_repo: Path) -> None:
     """Verify `POST /api/compile` compiles a local repository within token budget."""
     resp = client.post(
