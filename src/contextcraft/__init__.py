@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
+from contextcraft.core import ContextCraft
 from contextcraft.models import (
     ASTParseError,
     ByteRange,
@@ -22,9 +21,6 @@ from contextcraft.models import (
     SymbolKind,
     SymbolNode,
 )
-
-if TYPE_CHECKING:
-    from contextcraft.core import ContextCraft
 
 __version__ = "0.1.0"
 
@@ -48,12 +44,3 @@ __all__ = [
     "SymbolNode",
     "__version__",
 ]
-
-
-def __getattr__(name: str) -> Any:
-    """Lazy-load `ContextCraft` orchestrator to keep lightweight model imports fast."""
-    if name == "ContextCraft":
-        from contextcraft.core import ContextCraft
-
-        return ContextCraft
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
