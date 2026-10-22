@@ -81,10 +81,10 @@ dev = [
 contextcraft = "contextcraft.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/contextcraft/contextcraft"
-Documentation = "https://contextcraft.github.io/contextcraft"
-Repository = "https://github.com/contextcraft/contextcraft"
-Issues = "https://github.com/contextcraft/contextcraft/issues"
+Homepage = "https://github.com/khanhtq29vn/contextcraft"
+Documentation = "https://khanhtq29vn.github.io/contextcraft/"
+Repository = "https://github.com/khanhtq29vn/contextcraft"
+Issues = "https://github.com/khanhtq29vn/contextcraft/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/contextcraft"]
