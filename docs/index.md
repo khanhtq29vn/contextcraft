@@ -36,5 +36,6 @@ print(result.markdown)
 :caption: Contents
 
 architecture
+language-supports
 api-reference
 ```

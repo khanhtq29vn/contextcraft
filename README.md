@@ -80,7 +80,7 @@ Open `http://127.0.0.1:8000` to interactively tune token budgets, inspect PageRa
 └────────────────────────────────────┬───────────────────────────────────────┘
                                      ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ 2. UniversalASTParser (Tree-sitter + Deterministic Fallback)               │
+│ 2. Language Registry & Tree-sitter Parsing (Source-Preserving Fallback)   │
 │    • Extracts classes, functions, methods, signatures, and docstrings      │
 │    • Computes exact post-docstring `body_range` spans for surgical elision │
 └────────────────────────────────────┬───────────────────────────────────────┘
@@ -92,7 +92,7 @@ Open `http://127.0.0.1:8000` to interactively tune token budgets, inspect PageRa
 └────────────────────────────────────┬───────────────────────────────────────┘
                                      ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ 4. MultiResolutionElider (4 Discrete AST Fidelity Tiers per File)          │
+│ 4. Elider & Per-Language Builders (4 AST Fidelity Tiers per File)         │
 │    • Tier 3 [FULL] (u=1.00): Complete sanitized source code                │
 │    • Tier 2 [SKEL] (u=0.82): Signatures + types + docstrings (body elided) │
 │    • Tier 1 [SIGS] (u=0.45): Imports & public declarations only            │
