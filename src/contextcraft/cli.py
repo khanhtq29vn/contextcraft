@@ -50,6 +50,15 @@ def main(
             show_default=True,
         ),
     ] = "32k",
+    encoding: Annotated[
+        str,
+        typer.Option(
+            "--encoding",
+            "-enc",
+            help="Tiktoken encoding name used for token accounting (e.g. cl100k_base, o200k_base).",
+            show_default=True,
+        ),
+    ] = "cl100k_base",
     focus: Annotated[
         str | None,
         typer.Option(
@@ -140,6 +149,7 @@ def main(
             exclude_patterns=exclude_list,
             respect_gitignore=not no_gitignore,
             redact_secrets=not no_redact,
+            tokenizer_encoding=encoding,
         )
         result = compiler.compile(path)
     except ContextCraftError as exc:

@@ -4,9 +4,9 @@
 
 **AST-Aware, Dependency-Graph-Ranked, Token-Budgeted Semantic Codebase Compressor for LLMs**
 
-[![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/contextcraft/contextcraft/actions)
+[![CI](https://github.com/khanhtq29vn/contextcraft/actions/workflows/ci.yml/badge.svg)](https://github.com/khanhtq29vn/contextcraft/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![PyPI](https://img.shields.io/pypi/v/contextcraft.svg)](https://pypi.org/project/contextcraft-ai/)
+[![PyPI](https://img.shields.io/pypi/v/contextcraft-ai.svg)](https://pypi.org/project/contextcraft-ai/)
 [![Typed: mypy strict](https://img.shields.io/badge/typing-mypy%20--strict-indigo.svg)](https://mypy-lang.org/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -44,6 +44,9 @@ uv run contextcraft . --budget 4k --focus "AST elision and knapsack optimizer" -
 
 # Emit Anthropic Claude-optimized <repository_context> XML and copy to clipboard
 uv run contextcraft . --budget 32k --format xml --copy
+
+# Account tokens with a different tiktoken encoding (default is cl100k_base)
+uv run contextcraft . --budget 8k --encoding o200k_base -o context.md
 ```
 
 ### 3. Python SDK (Modeled after `microsoft/markitdown`)
