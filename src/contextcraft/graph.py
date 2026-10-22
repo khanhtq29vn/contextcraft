@@ -59,7 +59,7 @@ class DependencyGraphScorer:
         """Initialize the scorer with compilation configuration."""
         self.config = config or CompilationConfig()
 
-    def score_files(self, files: list[FileAnalysis]) -> nx.MultiDiGraph:
+    def score_files(self, files: list[FileAnalysis]) -> nx.MultiDiGraph[str]:
         """Build the dependency graph and populate `pagerank_score` on each `FileAnalysis`.
 
         Returns the constructed `nx.MultiDiGraph` for inspection or testing.
@@ -70,7 +70,7 @@ class DependencyGraphScorer:
         if len(files) == 1:
             files[0].relevance_boost = 1.0
             files[0].pagerank_score = 1.0
-            single_graph = nx.MultiDiGraph()
+            single_graph: nx.MultiDiGraph[str] = nx.MultiDiGraph()
             single_graph.add_node(files[0].rel_path)
             return single_graph
 
@@ -94,9 +94,9 @@ class DependencyGraphScorer:
 
         return graph
 
-    def build_dependency_graph(self, files: list[FileAnalysis]) -> nx.MultiDiGraph:
+    def build_dependency_graph(self, files: list[FileAnalysis]) -> nx.MultiDiGraph[str]:
         """Construct a directed multigraph where edges $(u \\to v)$ mean $u$ depends on $v$."""
-        graph = nx.MultiDiGraph()
+        graph: nx.MultiDiGraph[str] = nx.MultiDiGraph()
 
         # Index 1: symbol identifier -> set of defining file rel_paths
         symbol_definers: dict[str, set[str]] = defaultdict(set)
@@ -215,7 +215,7 @@ class DependencyGraphScorer:
     def _compute_personalization_vector(
         self,
         files: list[FileAnalysis],
-        graph: nx.MultiDiGraph,
+        graph: nx.MultiDiGraph[str],
         query_terms: list[str],
     ) -> dict[str, float]:
         """Compute Personalized PageRank teleportation probabilities across all files."""
@@ -308,7 +308,7 @@ class DependencyGraphScorer:
 
     @staticmethod
     def _run_pagerank(
-        graph: nx.MultiDiGraph,
+        graph: nx.MultiDiGraph[str],
         personalization: dict[str, float],
         alpha: float = 0.85,
         max_iter: int = 200,

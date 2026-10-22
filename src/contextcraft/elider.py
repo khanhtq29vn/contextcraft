@@ -25,7 +25,6 @@ try:
 
     HAS_TIKTOKEN = True
 except ImportError:  # pragma: no cover
-    tiktoken = None  # type: ignore[assignment]
     HAS_TIKTOKEN = False
 
 
@@ -42,7 +41,7 @@ class TokenCounter:
 
     @classmethod
     def _get_encoder(cls, encoding_name: str) -> Any | None:
-        if not HAS_TIKTOKEN or tiktoken is None:
+        if not HAS_TIKTOKEN:
             return None
         if encoding_name in cls._ENCODERS:
             return cls._ENCODERS[encoding_name]
