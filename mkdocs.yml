@@ -1,0 +1,39 @@
+site_name: ContextCraft Documentation
+site_description: AST-Aware, Dependency-Graph-Ranked, Token-Budgeted Semantic Codebase Compressor for LLMs
+site_url: https://contextcraft.dev
+repo_url: https://github.com/contextcraft/contextcraft
+repo_name: contextcraft
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+  - tables
+
+nav:
+  - Overview: index.md
+  - Architecture & Math: architecture.md
+  - CLI & Python SDK Reference: api-reference.md

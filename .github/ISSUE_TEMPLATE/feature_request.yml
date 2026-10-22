@@ -1,0 +1,20 @@
+name: Feature Request
+description: Propose a new language grammar, optimization heuristic, or output adapter
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement or Motivation
+      description: What workflow or LLM context challenge would this feature solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Design or CLI/SDK Interface
+      description: Describe how you envision this feature working.
+    validations:
+      required: true
