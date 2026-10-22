@@ -62,13 +62,6 @@ and the Python API; they are not CLI flags.
 | Make | `make` | | `Makefile`, `makefile`, `justfile` |
 | CMake | `cmake` | `.cmake` | `CMakeLists.txt` |
 
-C# uses the Tree-sitter parser ID `c_sharp`; Protocol Buffers uses `proto`.
-Those names are also accepted as registry lookup aliases.
-
-Some detected extensions and filenames use a related grammar rather than a
-dedicated dialect parser: `.zsh` uses Bash, `.mdx` uses Markdown, and `justfile`
-uses Make. Dialect-specific constructs may not be understood.
-
 ## Detection and fallback
 
 ContextCraft checks the exact filename first, then the file extension. It does

@@ -9,7 +9,7 @@ from contextcraft.languages.csharp.skeleton import SkeletonBuilder
 class CSharpLanguage(Language):
     spec = LanguageSpec(
         id="csharp",
-        parser_id="c_sharp",
+        parser_id="csharp",
         aliases=("c_sharp",),
         extensions=frozenset({".cs"}),
         ignore_patterns=("bin/", "obj/"),

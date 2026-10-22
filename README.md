@@ -68,6 +68,16 @@ uv run uvicorn web.app:app --reload --port 8000
 
 Open `http://127.0.0.1:8000` to interactively tune token budgets, inspect PageRank scores, or use the **URL Swap Trick**: visit `http://127.0.0.1:8000/<owner>/<repo>?budget=32k&focus=auth` to automatically clone and compress any public GitHub repository!
 
+Local repository paths must stay inside the server's working directory by default.
+To serve repositories from another directory, set `CONTEXTCRAFT_WEB_ROOT` before starting the server:
+
+```bash
+CONTEXTCRAFT_WEB_ROOT="$HOME/repositories" uv run uvicorn web.app:app --host 127.0.0.1 --port 8000
+```
+
+Relative paths are resolved from that root. Paths and symlinks that resolve outside it are rejected.
+The CLI and Python SDK can still compile any directory the caller can access.
+
 ---
 
 ## Architecture Pipeline
