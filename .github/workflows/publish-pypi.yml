@@ -1,12 +1,18 @@
 name: Publish to PyPI
 
 on:
-  push:
-    tags:
-      - "v*"
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to publish
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (for example, v0.2.0)
+        required: true
+        type: string
 
 jobs:
   build:
@@ -15,8 +21,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout repository
+      - name: Checkout release tag
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
