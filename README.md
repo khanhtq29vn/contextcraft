@@ -6,6 +6,7 @@
 
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/contextcraft/contextcraft/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![PyPI](https://img.shields.io/pypi/v/contextcraft-ai.svg)](https://pypi.org/project/contextcraft-ai/)
 [![Typed: mypy strict](https://img.shields.io/badge/typing-mypy%20--strict-indigo.svg)](https://mypy-lang.org/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -24,7 +25,18 @@ Existing repository packers (`repomix`, `gitingest`, `code2prompt`) blindly conc
 
 ## 10-Second Quickstart
 
-### 1. Command-Line Interface (CLI)
+### 1. Installation (PyPI & `uvx`)
+
+```bash
+# Run instantly without installing via uvx:
+uvx contextcraft-ai . --budget 16k --focus "AST elision and knapsack optimizer" -o context.md
+
+# Or install globally / in your virtual environment from PyPI:
+pip install contextcraft-ai
+contextcraft . --budget 32k --format xml --copy
+```
+
+### 2. Command-Line Interface (CLI)
 
 ```bash
 # Compress a repository into a strict 4,000-token budget biased toward your task
@@ -34,7 +46,7 @@ uv run contextcraft . --budget 4k --focus "AST elision and knapsack optimizer" -
 uv run contextcraft . --budget 32k --format xml --copy
 ```
 
-### 2. Python SDK (Modeled after `microsoft/markitdown`)
+### 3. Python SDK (Modeled after `microsoft/markitdown`)
 
 ```python
 from contextcraft import ContextCraft
@@ -48,7 +60,7 @@ print(
 )
 ```
 
-### 3. Interactive Web Playground & "URL Swap Trick"
+### 4. Interactive Web Playground & "URL Swap Trick"
 
 ```bash
 uv run uvicorn web.app:app --reload --port 8000

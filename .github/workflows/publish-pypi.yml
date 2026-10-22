@@ -1,6 +1,11 @@
 name: Publish to PyPI
 
 on:
+  release:
+    types: [ published ]
+  push:
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       tag:
@@ -38,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/contextcraft
+      url: https://pypi.org/p/contextcraft-ai
     permissions:
       id-token: write
       contents: read

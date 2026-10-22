@@ -4,8 +4,18 @@
 
 `ContextCraft` compiles any Git repository into an optimal, high-signal Markdown, Claude XML, or JSON context artifact that strictly fits your target token budget (e.g., `4k`, `16k`, `32k`, `128k` tokens).
 
-## Quickstart
+## Installation (PyPI & `uvx`)
 
+```bash
+# Run instantly without installing via uvx:
+uvx contextcraft-ai . --budget 16k --focus "AST elision and knapsack optimizer" -o context.md
+
+# Or install globally / in your virtual environment from PyPI:
+pip install contextcraft-ai
+contextcraft . --budget 32k --format xml --copy
+```
+
+## Quickstart
 ```bash
 # Compress the current repository into a strict 16,000-token budget
 uv run contextcraft . --budget 16k --focus "authentication flow" -o context.md
