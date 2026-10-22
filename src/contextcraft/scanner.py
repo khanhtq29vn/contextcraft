@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pathspec
 
@@ -255,7 +255,7 @@ class RepositoryScanner:
 
         ignore_spec = self._build_ignore_spec(resolved_root)
         include_spec = (
-            pathspec.PathSpec.from_lines("gitwildmatch", self.config.include_patterns)
+            pathspec.PathSpec.from_lines("gitignore", self.config.include_patterns)
             if self.config.include_patterns
             else None
         )
@@ -342,7 +342,7 @@ class RepositoryScanner:
             ignored_files_skipped=ignored_skipped,
         )
 
-    def _build_ignore_spec(self, root_path: Path) -> pathspec.PathSpec:
+    def _build_ignore_spec(self, root_path: Path) -> pathspec.PathSpec[Any]:
         """Collect default, `.gitignore`, `.contextignore`, and custom ignore rules."""
         patterns: list[str] = list(self.DEFAULT_IGNORED_GLOBS)
         patterns.extend(self.config.exclude_patterns)
@@ -368,7 +368,7 @@ class RepositoryScanner:
                         control_path = current_dir / control_name
                         patterns.extend(self._read_ignore_lines(control_path, prefix=rel_dir))
 
-        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+        return pathspec.PathSpec.from_lines("gitignore", patterns)
 
     @classmethod
     def _read_ignore_lines(cls, ignore_file: Path, prefix: str) -> list[str]:

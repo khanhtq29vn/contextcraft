@@ -161,7 +161,7 @@ class UniversalASTParser:
 
         ts_lang = "typescript" if language_id == "tsx" else language_id
         try:
-            parser = get_parser(ts_lang)  # type: ignore[arg-type]
+            parser = get_parser(ts_lang)
             raw_bytes = content.encode("utf-8")
             tree: Tree = parser.parse(raw_bytes)
             result = cls._extract_from_tree(tree.root_node, raw_bytes, language_id)
@@ -173,7 +173,6 @@ class UniversalASTParser:
                 "rust",
                 "go",
             }:
-                # If Tree-sitter grammar yielded nothing on non-empty code, try fallback
                 fallback = cls._fallback_parse_detailed(content, language_id)
                 if fallback.symbols:
                     return fallback
@@ -276,7 +275,6 @@ class UniversalASTParser:
 
         traverse(root)
 
-        # Ensure references don't duplicate symbols solely defined in the same file unless referenced
         return ASTParseResult(
             symbols=symbols,
             imports=imports,
@@ -381,7 +379,12 @@ class UniversalASTParser:
         if name_field is not None:
             return name_field
         for child in node.children:
-            if child.type in {"identifier", "type_identifier", "field_identifier", "property_identifier"}:
+            if child.type in {
+                "identifier",
+                "type_identifier",
+                "field_identifier",
+                "property_identifier",
+            }:
                 return child
         return None
 
@@ -425,7 +428,6 @@ class UniversalASTParser:
         prev = outer_node.prev_named_sibling
         comment_chunks: list[str] = []
         while prev is not None and "comment" in prev.type:
-            # Only attach comment if it is immediately adjacent (within 1 line)
             if outer_node.start_point[0] - prev.end_point[0] <= 2:
                 comment_chunks.append(cls._node_text(prev, raw_bytes).strip())
                 outer_node = prev
@@ -450,22 +452,16 @@ class UniversalASTParser:
         raw_bytes: bytes,
         language_id: str,
     ) -> ByteRange | None:
-        """Compute the exact byte span of a function/method body to elide in Tier 2.
-
-        Classes, interfaces, and structs have `body_range = None` so their member
-        methods can be individually retained or elided without wiping out the class!
-        """
+        """Compute the exact byte span of a function/method body to elide in Tier 2."""
         if body_node is None or kind not in {SymbolKind.FUNCTION, SymbolKind.METHOD}:
             return None
 
         if language_id == "python":
-            # Start AFTER the docstring if present so Tier 2 preserves docstrings!
             for child in body_node.children:
                 if child.type in {"comment", "newline", "indent", ":"}:
                     continue
                 if doc_end_byte is not None and child.end_byte <= doc_end_byte:
                     continue
-                # Found first executable statement after docstring
                 if body_node.end_byte > child.start_byte:
                     return ByteRange(
                         start_byte=child.start_byte,
@@ -475,8 +471,6 @@ class UniversalASTParser:
                     )
             return None
 
-        # Brace-delimited languages (TS, JS, Rust, Go, Java, C, C++):
-        # body_node typically starts with '{' and ends with '}'
         body_text = cls._node_text(body_node, raw_bytes)
         if body_text.startswith("{") and body_text.endswith("}") and len(body_text) > 2:
             return ByteRange(
@@ -586,25 +580,26 @@ class UniversalASTParser:
             if kw == "class":
                 class_stack.append((indent_len, qualified_name))
 
-            # Find end of Python signature (line ending with ':')
             sig_end_idx = idx
             while sig_end_idx < total_lines and not lines[sig_end_idx].rstrip().endswith(":"):
                 sig_end_idx += 1
             if sig_end_idx >= total_lines:
                 sig_end_idx = idx
 
-            # Find end of indented block
             end_idx = sig_end_idx
             for look_idx in range(sig_end_idx + 1, total_lines):
                 stripped = lines[look_idx].strip()
                 if not stripped or stripped.startswith("#"):
                     continue
-                cur_indent = len(lines[look_idx][: len(lines[look_idx]) - len(lines[look_idx].lstrip())].expandtabs(4))
+                cur_indent = len(
+                    lines[look_idx][: len(lines[look_idx]) - len(lines[look_idx].lstrip())].expandtabs(
+                        4
+                    )
+                )
                 if cur_indent <= indent_len:
                     break
                 end_idx = look_idx
 
-            # Check for docstring right after signature
             docstring: str | None = None
             body_start_idx = sig_end_idx + 1
             if body_start_idx <= end_idx:
@@ -663,7 +658,9 @@ class UniversalASTParser:
         imports: list[str],
         defined_idents: list[str],
     ) -> None:
-        import_re = re.compile(r"^\s*(?:import\b|export\s+.*\bfrom\b|use\s+|#include\b|package\s+)")
+        import_re = re.compile(
+            r"^\s*(?:import\b|export\s+.*\bfrom\b|use\s+|#include\b|package\s+)"
+        )
         decl_re = re.compile(
             r"^(?P<indent>[ \t]*)(?:export\s+)?(?:default\s+)?(?:pub\s+)?(?:async\s+)?"
             r"(?P<kw>function|class|interface|struct|enum|fn|func)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
@@ -694,7 +691,6 @@ class UniversalASTParser:
             }
             kind = kind_map.get(kw, SymbolKind.FUNCTION)
 
-            # Find matching closing brace across lines
             brace_balance = 0
             opened = False
             end_idx = idx

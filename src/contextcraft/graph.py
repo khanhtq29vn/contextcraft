@@ -4,7 +4,8 @@ Inspired by `Aider-AI/aider`'s `repomap.py`, this module constructs a weighted
 directed multigraph $G = (V, E)$ where vertices represent repository files and
 directed edges $(u \\to v)$ capture cross-file module imports and symbol references.
 
-Centrality is computed via Personalized PageRank biased toward:
+Centrality is computed via a pure-Python Personalized PageRank power-iteration
+solver (zero SciPy dependency) biased toward:
 1. User-specified `focus_files` and `focus_query` keywords (BM25 lexical scoring)
 2. 1-hop graph neighbors of focus-matched files
 3. Architectural entrypoints (`core.py`, `main.py`, `pyproject.toml`, `README.md`, etc.)
@@ -96,7 +97,6 @@ class DependencyGraphScorer:
     def build_dependency_graph(self, files: list[FileAnalysis]) -> nx.MultiDiGraph:
         """Construct a directed multigraph where edges $(u \\to v)$ mean $u$ depends on $v$."""
         graph = nx.MultiDiGraph()
-        file_by_path: dict[str, FileAnalysis] = {}
 
         # Index 1: symbol identifier -> set of defining file rel_paths
         symbol_definers: dict[str, set[str]] = defaultdict(set)
@@ -105,7 +105,6 @@ class DependencyGraphScorer:
 
         for file_obj in files:
             rel_path = file_obj.rel_path
-            file_by_path[rel_path] = file_obj
             graph.add_node(rel_path)
 
             for ident in file_obj.defined_identifiers:
@@ -134,7 +133,7 @@ class DependencyGraphScorer:
                         weight=6.0,
                         ident="__import__",
                     )
-                    # Weak reverse edge so tightly coupled callers also receive diffusion
+                    # Reverse coupling edge so callers of core modules also gain structural signal
                     graph.add_edge(
                         dst_path,
                         src_path,
@@ -173,10 +172,6 @@ class DependencyGraphScorer:
                         ident=f"caller:{ident}",
                     )
 
-            # 3. Small self-loop to stabilize isolated nodes during PageRank power iteration
-            if graph.out_degree(src_path) == 0:
-                graph.add_edge(src_path, src_path, weight=0.1, ident="__self__")
-
         return graph
 
     @classmethod
@@ -202,13 +197,11 @@ class DependencyGraphScorer:
         if ident.startswith("_"):
             weight *= 0.2
 
-        # Dampen ubiquitous identifiers defined in many files
         if definer_count > 5:
             weight *= 0.15
         elif definer_count > 1:
             weight *= 1.0 / math.sqrt(definer_count)
         elif total_files > 3:
-            # Unique definition across repository carries stronger architectural signal
             weight *= 1.5
 
         ident_lower = ident.lower()
@@ -228,7 +221,6 @@ class DependencyGraphScorer:
         """Compute Personalized PageRank teleportation probabilities across all files."""
         base_scores: dict[str, float] = {}
 
-        # Precompute document frequencies for query terms (BM25 / IDF weighting)
         doc_freq: Counter[str] = Counter()
         file_term_bags: dict[str, tuple[set[str], set[str], set[str], set[str]]] = {}
 
@@ -318,34 +310,71 @@ class DependencyGraphScorer:
     def _run_pagerank(
         graph: nx.MultiDiGraph,
         personalization: dict[str, float],
+        alpha: float = 0.85,
+        max_iter: int = 200,
+        tol: float = 1.0e-6,
     ) -> dict[str, float]:
-        """Collapse multigraph edges into a weighted DiGraph and execute PageRank."""
-        collapsed = nx.DiGraph()
-        for node in graph.nodes():
-            collapsed.add_node(node)
+        """Execute weighted Personalized PageRank via pure-Python power iteration.
 
-        for u, v, data in graph.edges(data=True):
-            w = float(data.get("weight", 1.0))
-            if collapsed.has_edge(u, v):
-                collapsed[u][v]["weight"] += w
+        Avoids NetworkX's `scipy` binary dependency while faithfully implementing
+        dangling-node mass redistribution and personalized teleportation:
+        $$x^{(t)}(v) = \\left[(1 - \\alpha) + \\alpha S_{\\text{dangling}}\\right] p(v)
+        + \\alpha \\sum_{u \\to v} x^{(t-1)}(u) \\frac{w(u, v)}{W_{\\text{out}}(u)}$$
+        """
+        nodes = list(graph.nodes())
+        num_nodes = len(nodes)
+        if num_nodes == 0:
+            return {}
+
+        # Normalize personalization vector p
+        total_pers = sum(max(personalization.get(n, 0.0), 0.0) for n in nodes)
+        if total_pers <= 0.0:
+            p = dict.fromkeys(nodes, 1.0 / num_nodes)
+        else:
+            p = {n: max(personalization.get(n, 0.0), 0.0) / total_pers for n in nodes}
+
+        # Collapse multigraph edges into normalized outgoing transition probabilities
+        out_transitions: dict[str, list[tuple[str, float]]] = {}
+        dangling_nodes: list[str] = []
+
+        for u in nodes:
+            agg_weights: dict[str, float] = defaultdict(float)
+            for _, v, data in graph.out_edges(u, data=True):
+                w = float(data.get("weight", 1.0))
+                if w > 0.0:
+                    agg_weights[str(v)] += w
+
+            total_out = sum(agg_weights.values())
+            if total_out <= 0.0:
+                dangling_nodes.append(u)
+                out_transitions[u] = []
             else:
-                collapsed.add_edge(u, v, weight=w)
+                out_transitions[u] = [
+                    (v, w / total_out) for v, w in agg_weights.items()
+                ]
 
-        try:
-            ranks: dict[str, float] = nx.pagerank(
-                collapsed,
-                alpha=0.85,
-                personalization=personalization,
-                dangling=personalization,
-                weight="weight",
-                max_iter=200,
-                tol=1.0e-6,
-            )
-            return ranks
-        except Exception:
-            # Fallback to normalized personalization scores if power iteration fails
-            total = sum(personalization.values()) or 1.0
-            return {k: v / total for k, v in personalization.items()}
+        ranks = dict(p)
+
+        for _ in range(max_iter):
+            prev_ranks = ranks
+            dangling_mass = sum(prev_ranks[u] for u in dangling_nodes)
+            base_factor = (1.0 - alpha) + (alpha * dangling_mass)
+
+            next_ranks: dict[str, float] = {n: base_factor * p[n] for n in nodes}
+
+            for u, transitions in out_transitions.items():
+                if not transitions:
+                    continue
+                u_share = alpha * prev_ranks[u]
+                for v, prob in transitions:
+                    next_ranks[v] += u_share * prob
+
+            ranks = next_ranks
+            err = sum(abs(ranks[n] - prev_ranks[n]) for n in nodes)
+            if err < num_nodes * tol:
+                break
+
+        return ranks
 
     @classmethod
     def _tokenize_query(cls, query: str | None) -> list[str]:
@@ -358,7 +387,6 @@ class DependencyGraphScorer:
         seen: set[str] = set()
 
         for tok in raw_tokens:
-            # Split camelCase/PascalCase and snake_case into sub-tokens as well
             sub_parts = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", tok).lower().split("_")
             for candidate in [tok.lower(), *sub_parts]:
                 if len(candidate) >= 2 and candidate not in seen:
@@ -398,7 +426,6 @@ class DependencyGraphScorer:
             posix.stem,
         }
 
-        # Strip common source roots like 'src/' or 'lib/' for package import matching
         for prefix in ("src/", "lib/", "app/", "packages/"):
             if without_ext.startswith(prefix):
                 trimmed = without_ext[len(prefix) :]
@@ -456,8 +483,8 @@ class DependencyGraphScorer:
             for m_js in js_import_re.finditer(imp_line):
                 raw_spec = m_js.group(1)
                 if raw_spec.startswith("."):
-                     joined = os.path.normpath(os.path.join(src_dir, raw_spec)).replace("\\", "/")
-                     candidates.append(joined.lstrip("./"))
+                    joined = os.path.normpath(os.path.join(src_dir, raw_spec)).replace("\\", "/")
+                    candidates.append(joined.lstrip("./"))
                 else:
                     candidates.append(raw_spec)
 
