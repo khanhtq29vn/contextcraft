@@ -34,3 +34,21 @@ result = cc.compile(".")
 print(f"Compressed {result.stats.raw_tokens} -> {result.stats.compressed_tokens} tokens")
 print(f"Compression ratio: {result.stats.compression_ratio}x")
 ```
+
+### Analysis and language registration
+
+`analyze_repository()` returns `FileAnalysis` objects with a byte-backed
+`parsed` AST and `tiers` containing `RenderedTier(content, tokens)` values.
+Fidelity levels are `TREE`, `SIGNATURES`, `SKELETON`, and `FULL`.
+Use `file.parsed.text(symbol.signature_range)` to read a symbol's signature.
+
+```python
+from contextcraft import ContextCraft, default_registry
+
+registry = default_registry()
+# Register custom Language subclasses before compiling.
+cc = ContextCraft(registry=registry)
+for file in cc.analyze_repository("."):
+    for symbol in file.symbols:
+        print(file.rel_path, file.parsed.text(symbol.signature_range))
+```

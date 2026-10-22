@@ -39,6 +39,24 @@ uv run pytest --cov=contextcraft --cov-report=term-missing
 
 ---
 
+## Test Layout
+
+- `tests/ast/`: AST models, parser behavior, and lexical scopes.
+- `tests/languages/`: shared language conformance tests and per-language extraction, skeleton, and signature tests.
+- `tests/pipeline/`: configuration, scanning, sanitization, ranking, optimization, elision, formatting, and token counting.
+- `tests/integration/`: compiler, CLI, web API, and benchmark workflows.
+
+Keep each test file focused on one component or behavior. Shared repository fixtures
+live in `tests/conftest.py`; language samples and tokenizer fixtures live in their
+subsystem's `conftest.py`. Pytest uses importlib mode so language folders can use
+consistent filenames such as `test_extraction.py` and `test_skeleton.py`.
+
+```bash
+uv run pytest tests/languages/
+uv run pytest tests/pipeline/test_optimizer.py
+uv run pytest tests/integration/
+```
+
 ## Documentation
 
 The documentation uses Sphinx, Furo, and MyST Markdown. After installing the development dependencies, preview it with live reload:
@@ -57,9 +75,11 @@ uv run --locked sphinx-build -W --keep-going -b dirhtml docs docs/_build/html
 
 ## 3. High-Impact Ways to Contribute
 
-1. **Adding or Enhancing Language Support (`src/contextcraft/scanner.py` & `ast_parser.py`):**
-   - Map additional file extensions in `RepositoryScanner.EXTENSION_LANGUAGE_MAP`.
-   - Add node types or docstring conventions in `UniversalASTParser`.
+1. **Adding or Enhancing Language Support (`src/contextcraft/languages/`):**
+   - Follow the JavaScript package layout: `language.py`, `extraction.py`, `skeleton.py`, and `signatures.py`.
+   - Declare parser IDs, extensions, filenames, and ignore patterns in `LanguageSpec`, then register the language in `languages/builtin.py`.
+   - Implement extraction and the `SkeletonBuilder` / `SignaturesBuilder` classes. Register them as `skeleton_builder` and `signatures_builder` on the language class.
+   - Test symbol ranges, syntax-safe summaries, missing grammars, and token-budget compliance.
 2. **Improving Cross-File Import Resolution (`src/contextcraft/graph.py`):**
    - Enhance `_resolve_imported_files` for Rust (`use crate::...`), Go, C/C++ `#include`, or Java package imports.
 3. **Expanding Secret Detection Rules (`src/contextcraft/sanitizer.py`):**

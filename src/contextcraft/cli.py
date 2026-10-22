@@ -1,9 +1,3 @@
-"""Rich CLI interface for ContextCraft.
-
-Provides a fast, zero-config command-line interface:
-    contextcraft . --budget 32k --focus "authentication flow" -o context.md
-"""
-
 from __future__ import annotations
 
 import shutil
@@ -20,30 +14,22 @@ from rich.table import Table
 
 from contextcraft import __version__
 from contextcraft.core import ContextCraft
-from contextcraft.models import (
-    CompilationResult,
-    ContextCraftError,
-    FidelityLevel,
-    OutputFormat,
-)
+from contextcraft.elider import FidelityLevel
+from contextcraft.models import CompilationResult, ContextCraftError, OutputFormat
 
 app = typer.Typer(
     name="contextcraft",
-    help=(
-        "AST-Aware, Dependency-Graph-Ranked, Token-Budgeted "
-        "Semantic Codebase Compressor for LLMs."
-    ),
+    help="AST-Aware, Dependency-Graph-Ranked, Token-Budgeted Semantic Codebase Compressor for LLMs.",
     add_completion=False,
     no_args_is_help=False,
 )
-
-err_console = Console(stderr=True)
-out_console = Console(stderr=False)
+_error_console = Console(stderr=True)
+_output_console = Console(stderr=False)
 
 
 def _version_callback(value: bool) -> None:
     if value:
-        out_console.print(f"contextcraft {__version__}")
+        _output_console.print(f"contextcraft {__version__}")
         raise typer.Exit(code=0)
 
 
@@ -52,8 +38,7 @@ def main(
     path: Annotated[
         Path,
         typer.Argument(
-            help="Path to the target Git repository or source directory.",
-            show_default=True,
+            help="Path to the target Git repository or source directory.", show_default=True
         ),
     ] = Path("."),
     budget: Annotated[
@@ -93,56 +78,35 @@ def main(
     output: Annotated[
         Path | None,
         typer.Option(
-            "--output",
-            "-o",
-            help="Write compiled context to this file path instead of stdout.",
+            "--output", "-o", help="Write compiled context to this file path instead of stdout."
         ),
     ] = None,
     include: Annotated[
         list[str] | None,
-        typer.Option(
-            "--include",
-            "-i",
-            help="Glob pattern of files to include (repeatable).",
-        ),
+        typer.Option("--include", "-i", help="Glob pattern of files to include (repeatable)."),
     ] = None,
     exclude: Annotated[
         list[str] | None,
         typer.Option(
-            "--exclude",
-            "-e",
-            help="Additional glob pattern of files to exclude (repeatable).",
+            "--exclude", "-e", help="Additional glob pattern of files to exclude (repeatable)."
         ),
     ] = None,
     copy: Annotated[
         bool,
         typer.Option(
-            "--copy",
-            "-c",
-            help="Copy the compiled output directly to the system clipboard.",
+            "--copy", "-c", help="Copy the compiled output directly to the system clipboard."
         ),
     ] = False,
     no_redact: Annotated[
-        bool,
-        typer.Option(
-            "--no-redact",
-            help="Disable automatic secret and API key redaction.",
-        ),
+        bool, typer.Option("--no-redact", help="Disable automatic secret and API key redaction.")
     ] = False,
     no_gitignore: Annotated[
         bool,
-        typer.Option(
-            "--no-gitignore",
-            help="Do not respect .gitignore and .contextignore files.",
-        ),
+        typer.Option("--no-gitignore", help="Do not respect .gitignore and .contextignore files."),
     ] = False,
     quiet: Annotated[
         bool,
-        typer.Option(
-            "--quiet",
-            "-q",
-            help="Suppress the Rich telemetry summary table on stderr.",
-        ),
+        typer.Option("--quiet", "-q", help="Suppress the Rich telemetry summary table on stderr."),
     ] = False,
     version: Annotated[
         bool,
@@ -155,14 +119,18 @@ def main(
         ),
     ] = False,
 ) -> None:
-    """Compile a repository into an optimal, token-budgeted LLM context artifact."""
     _ = version
     try:
         exclude_list = list(exclude) if exclude else []
         if output is not None:
-            # Ensure we never accidentally ingest the output file being written
-            exclude_list.append(output.name)
-
+            try:
+                relative_output = (
+                    output.expanduser().resolve().relative_to(path.expanduser().resolve())
+                )
+            except ValueError:
+                pass
+            else:
+                exclude_list.append("/" + relative_output.as_posix())
         compiler = ContextCraft(
             budget_tokens=budget,
             focus_query=focus,
@@ -175,13 +143,11 @@ def main(
         )
         result = compiler.compile(path)
     except ContextCraftError as exc:
-        err_console.print(f"[bold red]ContextCraft Error:[/bold red] {exc}")
+        _error_console.print(f"[bold red]ContextCraft Error:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc
-    except Exception as exc:  # pragma: no cover
-        err_console.print(f"[bold red]Unexpected Failure:[/bold red] {exc}")
+    except Exception as exc:
+        _error_console.print(f"[bold red]Unexpected Failure:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc
-
-    # 1. Emit artifact to file or stdout
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(result.content, encoding="utf-8")
@@ -190,19 +156,12 @@ def main(
         if not result.content.endswith("\n"):
             sys.stdout.write("\n")
         sys.stdout.flush()
-
-    # 2. Optionally copy to clipboard
     copied_ok = False
     if copy:
         copied_ok = _copy_to_clipboard(result.content)
-
-    # 3. Render telemetry dashboard to stderr unless --quiet is set
     if not quiet:
         _render_telemetry_summary(
-            result=result,
-            output_path=output,
-            copied_to_clipboard=copied_ok,
-            copy_requested=copy,
+            result=result, output_path=output, copied_to_clipboard=copied_ok, copy_requested=copy
         )
 
 
@@ -213,18 +172,10 @@ def _render_telemetry_summary(
     copied_to_clipboard: bool,
     copy_requested: bool,
 ) -> None:
-    """Render a compact Rich telemetry table to `stderr`."""
     stats = result.stats
-
-    metrics_table = Table(
-        box=box.ROUNDED,
-        show_header=True,
-        header_style="bold cyan",
-        expand=False,
-    )
+    metrics_table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan", expand=False)
     metrics_table.add_column("Metric", style="bold white")
     metrics_table.add_column("Value", justify="right", style="green")
-
     metrics_table.add_row("Repository Root", result.root_path)
     metrics_table.add_row(
         "Files Compiled",
@@ -241,12 +192,7 @@ def _render_telemetry_summary(
     )
     metrics_table.add_row(
         "Fidelity Allocation",
-        (
-            f"FULL: {stats.fidelity_counts.get('FULL', 0)} | "
-            f"SKEL: {stats.fidelity_counts.get('SKEL', 0)} | "
-            f"SIGS: {stats.fidelity_counts.get('SIGS', 0)} | "
-            f"TREE: {stats.fidelity_counts.get('TREE', 0)}"
-        ),
+        f"FULL: {stats.fidelity_counts.get('FULL', 0)} | SKEL: {stats.fidelity_counts.get('SKEL', 0)} | SIGS: {stats.fidelity_counts.get('SIGS', 0)} | TREE: {stats.fidelity_counts.get('TREE', 0)}",
     )
     metrics_table.add_row(
         "Signature Coverage",
@@ -254,27 +200,22 @@ def _render_telemetry_summary(
     )
     if stats.secrets_redacted > 0:
         metrics_table.add_row(
-            "Secrets Scrubbed",
-            f"[bold yellow]{stats.secrets_redacted} redacted[/bold yellow]",
+            "Secrets Scrubbed", f"[bold yellow]{stats.secrets_redacted} redacted[/bold yellow]"
         )
     metrics_table.add_row("Execution Time", f"{stats.execution_time_ms:.1f} ms")
-
     if output_path is not None:
         metrics_table.add_row("Saved Output", str(output_path))
     if copy_requested:
         status_str = "Copied to clipboard" if copied_to_clipboard else "Clipboard unavailable"
         metrics_table.add_row("Clipboard", status_str)
-
-    err_console.print()
-    err_console.print(
+    _error_console.print()
+    _error_console.print(
         Panel.fit(
             metrics_table,
             title="[bold magenta]ContextCraft Compilation Summary[/bold magenta]",
             border_style="bright_blue",
         )
     )
-
-    # Display top-ranked files table if files were compiled
     if result.files:
         top_table = Table(
             title="Top Architectural Files by Personalized PageRank",
@@ -285,14 +226,12 @@ def _render_telemetry_summary(
         top_table.add_column("Fidelity", justify="center")
         top_table.add_column("PageRank", justify="right", style="cyan")
         top_table.add_column("Tokens (Selected / Raw)", justify="right", style="green")
-
         badge_styles = {
-            FidelityLevel.FULL_SOURCE: "[bold green]FULL[/bold green]",
-            FidelityLevel.SKELETON_WITH_DOCSTRINGS: "[bold cyan]SKEL[/bold cyan]",
-            FidelityLevel.SIGNATURES_ONLY: "[bold yellow]SIGS[/bold yellow]",
-            FidelityLevel.TREE_ONLY: "[dim]TREE[/dim]",
+            FidelityLevel.FULL: "[bold green]FULL[/bold green]",
+            FidelityLevel.SKELETON: "[bold cyan]SKEL[/bold cyan]",
+            FidelityLevel.SIGNATURES: "[bold yellow]SIGS[/bold yellow]",
+            FidelityLevel.TREE: "[dim]TREE[/dim]",
         }
-
         ranked = sorted(result.files, key=lambda f: (-f.pagerank_score, f.rel_path))
         for file_obj in ranked[:5]:
             top_table.add_row(
@@ -301,11 +240,10 @@ def _render_telemetry_summary(
                 f"{file_obj.pagerank_score * 100.0:.1f}%",
                 f"{file_obj.selected_tokens:,} / {file_obj.raw_tokens:,}",
             )
-        err_console.print(top_table)
+        _error_console.print(top_table)
 
 
 def _copy_to_clipboard(text: str) -> bool:
-    """Copy `text` to the system clipboard using native OS utilities."""
     commands: list[list[str]] = [
         ["pbcopy"],
         ["wl-copy"],
@@ -332,5 +270,5 @@ def _copy_to_clipboard(text: str) -> bool:
     return False
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     app()

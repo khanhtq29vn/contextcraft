@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from contextcraft.core import ContextCraft
-from contextcraft.elider import TokenCounter
-from contextcraft.models import FidelityLevel, FileAnalysis
+from contextcraft.elider import FidelityLevel, TokenCounter
+from contextcraft.models import FileAnalysis
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,11 +58,9 @@ def evaluate_naive_truncation(
         else:
             break
 
-    total_public_syms = sum(
-        len([s for s in f.symbols if s.is_exported]) for f in sorted_files
-    )
+    total_public_syms = sum(len([s for s in f.symbols if s.is_public]) for f in sorted_files)
     retained_public_syms = sum(
-        len([s for s in f.symbols if s.is_exported])
+        len([s for s in f.symbols if s.is_public])
         for f in sorted_files
         if f.rel_path in included_files
     )
@@ -75,11 +73,7 @@ def evaluate_naive_truncation(
     )
 
     core_pct = (core_retained / core_total * 100.0) if core_total > 0 else 100.0
-    sig_pct = (
-        (retained_public_syms / total_public_syms * 100.0)
-        if total_public_syms > 0
-        else 100.0
-    )
+    sig_pct = (retained_public_syms / total_public_syms * 100.0) if total_public_syms > 0 else 100.0
     emitted = min(raw_total, budget_tokens)
     ratio = round(raw_total / max(emitted, 1), 2)
     _ = counter
@@ -105,29 +99,22 @@ def evaluate_contextcraft(
     cc = ContextCraft(budget_tokens=budget_tokens, focus_query=focus_query)
     result = cc.compile(repo_path)
 
-    total_public_syms = sum(
-        len([s for s in f.symbols if s.is_exported]) for f in result.files
-    )
+    total_public_syms = sum(len([s for s in f.symbols if s.is_public]) for f in result.files)
     retained_public_syms = sum(
-        len([s for s in f.symbols if s.is_exported])
+        len([s for s in f.symbols if s.is_public])
         for f in result.files
-        if f.selected_fidelity >= FidelityLevel.SIGNATURES_ONLY
+        if f.selected_fidelity >= FidelityLevel.SIGNATURES
     )
 
     core_total = sum(len(f.symbols) for f in result.files if f.rel_path in core_files)
     core_retained = sum(
         len(f.symbols)
         for f in result.files
-        if f.rel_path in core_files
-        and f.selected_fidelity >= FidelityLevel.SKELETON_WITH_DOCSTRINGS
+        if f.rel_path in core_files and f.selected_fidelity >= FidelityLevel.SKELETON
     )
 
     core_pct = (core_retained / core_total * 100.0) if core_total > 0 else 100.0
-    sig_pct = (
-        (retained_public_syms / total_public_syms * 100.0)
-        if total_public_syms > 0
-        else 100.0
-    )
+    sig_pct = (retained_public_syms / total_public_syms * 100.0) if total_public_syms > 0 else 100.0
 
     return BenchmarkRow(
         method="ContextCraft (Ours)",

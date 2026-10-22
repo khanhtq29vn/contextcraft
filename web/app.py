@@ -15,6 +15,7 @@ Provides three core developer experiences:
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -41,7 +42,10 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 _GITHUB_URL_RE = re.compile(
     r"^(?:https?://)?(?:www\.)?github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?/?$"
 )
-_SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+_SLUG_RE = re.compile(r"(?!\.{1,2}$)[A-Za-z0-9_.-]+")
+_LOCAL_REPOSITORY_ROOT = (
+    Path(os.environ.get("CONTEXTCRAFT_WEB_ROOT", os.getcwd())).expanduser().resolve()
+)
 
 app = FastAPI(
     title="ContextCraft Web Playground",
@@ -55,7 +59,7 @@ class CompileRequestPayload(BaseModel):
 
     source: str = Field(
         default=".",
-        description="Local repository directory path OR public GitHub repository URL (`https://github.com/owner/repo`).",
+        description="Repository path within the configured web root OR public GitHub repository URL (`https://github.com/owner/repo`).",
     )
     budget: str | int = Field(
         default="16k",
@@ -126,6 +130,39 @@ def index_page(
     )
 
 
+def _resolve_local_repository(source: str) -> Path:
+    if "\x00" in source:
+        raise HTTPException(status_code=400, detail="Invalid repository path.")
+    root = os.fspath(_LOCAL_REPOSITORY_ROOT)
+    try:
+        relative = os.path.relpath(os.path.join(root, os.path.expanduser(source)), root)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail="Repository path must be within the configured web root.",
+        ) from exc
+
+    # Rejoin to retain the configured root's casing on Windows.
+    normalized = os.path.normpath(os.path.join(root, relative))
+    if normalized == root:
+        return _LOCAL_REPOSITORY_ROOT
+    if not normalized.startswith(os.path.join(root, "")):
+        raise HTTPException(
+            status_code=403,
+            detail="Repository path must be within the configured web root.",
+        )
+    try:
+        local_path = Path(normalized).resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid repository path.") from exc
+    if not local_path.is_relative_to(_LOCAL_REPOSITORY_ROOT):
+        raise HTTPException(
+            status_code=403,
+            detail="Repository path must be within the configured web root.",
+        )
+    return _LOCAL_REPOSITORY_ROOT / local_path.relative_to(_LOCAL_REPOSITORY_ROOT)
+
+
 @app.post("/api/compile", response_model=CompileResponsePayload)
 def api_compile(payload: CompileRequestPayload) -> CompileResponsePayload:
     """Compile either a local repository or a remote GitHub URL within budget."""
@@ -146,8 +183,7 @@ def api_compile(payload: CompileRequestPayload) -> CompileResponsePayload:
             repo = gh_match.group("repo")
             result = _clone_and_compile_github_repo(compiler, owner=owner, repo=repo)
         else:
-            local_path = Path(source_str).expanduser().resolve()
-            result = compiler.compile(local_path)
+            result = compiler.compile(_resolve_local_repository(source_str))
     except ContextCraftError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except subprocess.SubprocessError as exc:
@@ -189,7 +225,7 @@ def github_url_swap_page(
     fmt: str = Query(default="markdown"),
 ) -> HTMLResponse:
     """Viral URL-Swap endpoint: `<domain>/{owner}/{repo}?budget=32k&focus=auth`."""
-    if not (_SLUG_RE.match(owner) and _SLUG_RE.match(repo)):
+    if not (_SLUG_RE.fullmatch(owner) and _SLUG_RE.fullmatch(repo)):
         raise HTTPException(status_code=400, detail="Invalid GitHub owner or repository name.")
 
     github_url = f"https://github.com/{owner}/{repo}"
@@ -214,7 +250,7 @@ def _clone_and_compile_github_repo(
     repo: str,
 ) -> CompilationResult:
     """Perform a shallow `git clone --depth 1` into a temp directory and compile it."""
-    if not (_SLUG_RE.match(owner) and _SLUG_RE.match(repo)):
+    if not (_SLUG_RE.fullmatch(owner) and _SLUG_RE.fullmatch(repo)):
         raise ContextCraftError(f"Invalid GitHub repository slug: {owner}/{repo}")
 
     git_bin = shutil.which("git")
@@ -223,7 +259,7 @@ def _clone_and_compile_github_repo(
 
     clone_url = f"https://github.com/{owner}/{repo}.git"
     with tempfile.TemporaryDirectory(prefix="contextcraft_gh_") as tmp_root:
-        target_dir = Path(tmp_root) / repo
+        target_dir = Path(tmp_root) / "repository"
         subprocess.run(
             [git_bin, "clone", "--depth", "1", "--single-branch", clone_url, str(target_dir)],
             check=True,

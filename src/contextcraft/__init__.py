@@ -1,24 +1,23 @@
-"""ContextCraft: AST-Aware, Dependency-Graph-Ranked, Token-Budgeted Codebase Compressor."""
-
 from __future__ import annotations
 
+from contextcraft.ast import ByteRange, Import, ParsedAst, Symbol
 from contextcraft.core import ContextCraft
+from contextcraft.elider import Elider, FidelityLevel, RenderedTier, TokenCounter
+from contextcraft.languages.builtin import default_registry
+from contextcraft.languages.registry import LanguageRegistry
 from contextcraft.models import (
     ASTParseError,
-    ByteRange,
     CompilationConfig,
     CompilationError,
     CompilationResult,
     CompilationStats,
     ContextCraftError,
-    FidelityLevel,
     FileAnalysis,
     InvalidBudgetError,
     OutputFormat,
     RepositoryNotFoundError,
     SecretKind,
     SecretMatch,
-    SymbolNode,
 )
 
 __version__ = "0.2.0"
@@ -32,13 +31,20 @@ __all__ = [
     "CompilationStats",
     "ContextCraft",
     "ContextCraftError",
+    "Elider",
     "FidelityLevel",
     "FileAnalysis",
+    "Import",
     "InvalidBudgetError",
+    "LanguageRegistry",
     "OutputFormat",
+    "ParsedAst",
+    "RenderedTier",
     "RepositoryNotFoundError",
     "SecretKind",
     "SecretMatch",
-    "SymbolNode",
+    "Symbol",
+    "TokenCounter",
     "__version__",
+    "default_registry",
 ]

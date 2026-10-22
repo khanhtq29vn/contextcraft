@@ -89,7 +89,7 @@ def sample_repo(tmp_path: Path) -> Path:
         "import hashlib\n"
         "import hmac\n"
         "from src.auth.models import AuthConfig, TokenPayload, UserClaims\n\n"
-        '# Intentional test credential that must be scrubbed by SecretSanitizer\n'
+        "# Intentional test credential that must be scrubbed by SecretSanitizer\n"
         'OPENAI_API_KEY = "sk-proj-1234567890abcdefghijklmnopQRSTUV"\n\n\n'
         "class JWTAuthService:\n"
         '    """Handles cryptographic JWT signing, verification, and revocation."""\n\n'

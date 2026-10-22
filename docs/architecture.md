@@ -3,9 +3,10 @@
 `ContextCraft` replaces naive alphabetical file concatenation with a 5-stage compiler pipeline:
 
 1. **Gitignore-Aware Ingestion & Pre-AST Secret Sanitization (`scanner.py`, `sanitizer.py`):**
-   Scrubs API keys, PEM blocks, and high-entropy credentials while preserving exact line counts and string quotes so downstream AST byte offsets never shift.
-2. **Universal Tree-sitter AST Parsing (`ast_parser.py`):**
-   Extracts classes, functions, methods, signatures, docstrings, and post-docstring `body_range` byte spans.
+   Scrubs API keys, PEM blocks, and high-entropy credentials before parsing, preserving line endings and string quotes. AST byte offsets refer to the sanitized source.
+2. **Language Registry & Tree-sitter AST Parsing (`ast/parser.py`, `languages/`):**
+   Detects languages through `LanguageSpec` extensions and filenames. Each language package defines `language.py`, `extraction.py`, `skeleton.py`, and `signatures.py`. Extractors produce a byte-backed `ParsedAst` with symbols, imports, lexical scopes, and source ranges. Missing grammars preserve the source; builders also preserve source with syntax errors.
+   HTML stores inline JavaScript and CSS as embedded AST regions. Its skeleton builder reuses their language builders and applies all replacements in reverse byte order. Unsupported script types and external scripts remain unchanged.
 3. **Cross-File Dependency Graph & Personalized PageRank (`graph.py`):**
    Constructs a weighted directed multigraph $G = (V, E)$ from module imports and symbol references. Computes centrality $w_i = \text{PageRank}(i; q)$ biased toward `--focus` query matches via BM25 lexical scoring and 1-hop neighbor diffusion.
 4. **Multi-Resolution AST Elision (`elider.py`):**
