@@ -40,7 +40,7 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-  "networkx>=3.4.2",  # Python 3.10-compatible minimum; uv.lock selects newer releases.
+  "networkx>=3.4.2", # Python 3.10-compatible minimum; uv.lock selects newer releases.
   "pathspec>=1.1.1",
   "pydantic>=2.14.1",
   "rich>=15.0.0",
@@ -64,7 +64,7 @@ dev = [
   "jinja2>=3.1.6",
   "mypy>=2.4.0",
   "myst-parser>=4.0",
-  "pre-commit>=4.6.2",  # Python 3.10-compatible minimum; uv.lock selects newer releases.
+  "pre-commit>=4.6.2", # Python 3.10-compatible minimum; uv.lock selects newer releases.
   "pytest>=9.1.1",
   "pytest-cov>=7.1.0",
   "ruff>=0.17.1",
@@ -95,18 +95,18 @@ src = ["src", "tests", "web", "benchmarks"]
 
 [tool.ruff.lint]
 select = [
-  "E",  # pycodestyle errors
-  "W",  # pycodestyle warnings
-  "F",  # pyflakes
-  "I",  # isort
-  "B",  # flake8-bugbear
-  "C4",  # flake8-comprehensions
-  "UP",  # pyupgrade
-  "SIM",  # flake8-simplify
-  "RUF",  # Ruff-specific rules
+  "E", # pycodestyle errors
+  "W", # pycodestyle warnings
+  "F", # pyflakes
+  "I", # isort
+  "B", # flake8-bugbear
+  "C4", # flake8-comprehensions
+  "UP", # pyupgrade
+  "SIM", # flake8-simplify
+  "RUF", # Ruff-specific rules
 ]
 ignore = [
-  "E501",  # line too long (handled by formatter)
+  "E501", # line too long (handled by formatter)
 ]
 
 [tool.ruff.lint.isort]

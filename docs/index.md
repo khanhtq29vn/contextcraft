@@ -16,6 +16,7 @@ contextcraft . --budget 32k --format xml --copy
 ```
 
 ## Quickstart
+
 ```bash
 # Compress the current repository into a strict 16,000-token budget
 uv run contextcraft . --budget 16k --focus "authentication flow" -o context.md

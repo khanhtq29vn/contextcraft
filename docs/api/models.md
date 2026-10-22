@@ -11,13 +11,13 @@ from `contextcraft`.
    :undoc-members:
 ```
 
-| Field | Meaning |
-| :--- | :--- |
-| `root_path` | Resolved repository root as a string |
-| `output_format` | Selected `OutputFormat` |
-| `content` | Complete formatted artifact |
-| `stats` | `CompilationStats` for this compilation |
-| `files` | Analyzed files, including files selected at `TREE` fidelity |
+| Field           | Meaning                                                     |
+| :-------------- | :---------------------------------------------------------- |
+| `root_path`     | Resolved repository root as a string                        |
+| `output_format` | Selected `OutputFormat`                                     |
+| `content`       | Complete formatted artifact                                 |
+| `stats`         | `CompilationStats` for this compilation                     |
+| `files`         | Analyzed files, including files selected at `TREE` fidelity |
 
 `markdown` and `text_content` are aliases for `content`, not format converters.
 
@@ -32,24 +32,24 @@ from `contextcraft`.
 `CompilationStats` is a Pydantic model with the following fields. Use
 `result.stats.model_dump()` for a dictionary or `model_dump_json()` for JSON.
 
-| Field | Meaning |
-| :--- | :--- |
-| `total_files_discovered` | Files discovered during scanning |
-| `binary_files_skipped` | Files skipped as binary |
-| `ignored_files_skipped` | Files skipped by filtering or scan constraints |
-| `files_compiled` | Number of analyzed files, including `TREE` selections |
-| `raw_tokens` | Sum of the analyzed files' `FULL` tier token counts |
-| `compressed_tokens` | Token count of the complete formatted artifact |
-| `tree_overhead_tokens` | Token count of the directory tree |
-| `budget_tokens` | Requested token budget |
-| `budget_utilization_pct` | Artifact tokens divided by budget, times 100 |
-| `compression_ratio` | Raw tokens divided by artifact tokens (1.0 if no raw tokens) |
-| `token_savings_pct` | Percentage reduction from raw tokens to artifact tokens |
-| `fidelity_counts` | File counts by fidelity badge (`TREE`, `SIGS`, `SKEL`, `FULL`) |
-| `total_symbols_extracted` | Number of extracted symbols |
-| `preserved_signatures_pct` | Percentage of symbol signatures retained in selected content |
-| `secrets_redacted` | Number of detected secrets redacted |
-| `execution_time_ms` | Compilation duration in milliseconds |
+| Field                      | Meaning                                                        |
+| :------------------------- | :------------------------------------------------------------- |
+| `total_files_discovered`   | Files discovered during scanning                               |
+| `binary_files_skipped`     | Files skipped as binary                                        |
+| `ignored_files_skipped`    | Files skipped by filtering or scan constraints                 |
+| `files_compiled`           | Number of analyzed files, including `TREE` selections          |
+| `raw_tokens`               | Sum of the analyzed files' `FULL` tier token counts            |
+| `compressed_tokens`        | Token count of the complete formatted artifact                 |
+| `tree_overhead_tokens`     | Token count of the directory tree                              |
+| `budget_tokens`            | Requested token budget                                         |
+| `budget_utilization_pct`   | Artifact tokens divided by budget, times 100                   |
+| `compression_ratio`        | Raw tokens divided by artifact tokens (1.0 if no raw tokens)   |
+| `token_savings_pct`        | Percentage reduction from raw tokens to artifact tokens        |
+| `fidelity_counts`          | File counts by fidelity badge (`TREE`, `SIGS`, `SKEL`, `FULL`) |
+| `total_symbols_extracted`  | Number of extracted symbols                                    |
+| `preserved_signatures_pct` | Percentage of symbol signatures retained in selected content   |
+| `secrets_redacted`         | Number of detected secrets redacted                            |
+| `execution_time_ms`        | Compilation duration in milliseconds                           |
 
 Raw tokens are counted after redaction. Artifact counts include formatting
 overhead, so token savings can be negative for small inputs.
@@ -76,12 +76,12 @@ objects. `redacted_secrets` contains `SecretMatch` records.
    :undoc-members:
 ```
 
-| Level | Value | Content |
-| :--- | :--- | :--- |
-| `TREE` | `0` | Empty file content; path remains in the directory tree |
-| `SIGNATURES` | `1` | Language-specific signatures or compact summary |
-| `SKELETON` | `2` | Structural representation with implementation elided |
-| `FULL` | `3` | Full source after optional redaction |
+| Level        | Value | Content                                                |
+| :----------- | :---- | :----------------------------------------------------- |
+| `TREE`       | `0`   | Empty file content; path remains in the directory tree |
+| `SIGNATURES` | `1`   | Language-specific signatures or compact summary        |
+| `SKELETON`   | `2`   | Structural representation with implementation elided   |
+| `FULL`       | `3`   | Full source after optional redaction                   |
 
 ```{eval-rst}
 .. autoclass:: contextcraft.RenderedTier

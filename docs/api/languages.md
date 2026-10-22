@@ -44,14 +44,14 @@ The following types live in `contextcraft.languages.base`.
 .. autoclass:: contextcraft.languages.base.LanguageSpec
 ```
 
-| Field | Meaning |
-| :--- | :--- |
-| `id` | Unique registry ID |
-| `extensions` | Filename suffixes including the leading dot, such as `.py` |
-| `filenames` | Exact filenames such as `Dockerfile` |
-| `ignore_patterns` | Language-specific scanner exclusions |
-| `parser_id` | Grammar name passed to tree-sitter-language-pack, or `None` |
-| `aliases` | Additional names accepted by registry lookup |
+| Field             | Meaning                                                     |
+| :---------------- | :---------------------------------------------------------- |
+| `id`              | Unique registry ID                                          |
+| `extensions`      | Filename suffixes including the leading dot, such as `.py`  |
+| `filenames`       | Exact filenames such as `Dockerfile`                        |
+| `ignore_patterns` | Language-specific scanner exclusions                        |
+| `parser_id`       | Grammar name passed to tree-sitter-language-pack, or `None` |
+| `aliases`         | Additional names accepted by registry lookup                |
 
 ```{eval-rst}
 .. autoclass:: contextcraft.languages.base.Language

@@ -65,18 +65,18 @@ for file in ContextCraft().analyze_repository("."):
 Configuration is a Pydantic model. Unknown fields are rejected and assignments
 are validated.
 
-| Field | Default | Meaning |
-| :--- | :--- | :--- |
-| `budget_tokens` | `32000` | Positive token budget; accepts integer or shorthand input |
-| `focus_query` | `None` | Query used to boost relevant files |
-| `focus_files` | `[]` | Relative paths or globs to boost |
-| `output_format` | `OutputFormat.MARKDOWN` | Artifact format |
-| `include_patterns` | `[]` | Include globs; empty means no include filter |
-| `exclude_patterns` | `[]` | Additional exclude globs |
-| `respect_gitignore` | `True` | Apply `.gitignore` and `.contextignore` rules |
-| `redact_secrets` | `True` | Redact detected secrets before parsing |
-| `max_file_size_bytes` | `1048576` | Positive maximum file size |
-| `tokenizer_encoding` | `"cl100k_base"` | tiktoken encoding name |
+| Field                 | Default                 | Meaning                                                   |
+| :-------------------- | :---------------------- | :-------------------------------------------------------- |
+| `budget_tokens`       | `32000`                 | Positive token budget; accepts integer or shorthand input |
+| `focus_query`         | `None`                  | Query used to boost relevant files                        |
+| `focus_files`         | `[]`                    | Relative paths or globs to boost                          |
+| `output_format`       | `OutputFormat.MARKDOWN` | Artifact format                                           |
+| `include_patterns`    | `[]`                    | Include globs; empty means no include filter              |
+| `exclude_patterns`    | `[]`                    | Additional exclude globs                                  |
+| `respect_gitignore`   | `True`                  | Apply `.gitignore` and `.contextignore` rules             |
+| `redact_secrets`      | `True`                  | Redact detected secrets before parsing                    |
+| `max_file_size_bytes` | `1048576`               | Positive maximum file size                                |
+| `tokenizer_encoding`  | `"cl100k_base"`         | tiktoken encoding name                                    |
 
 `parse_budget()` accepts positive integers and decimal strings with optional
 case-insensitive `k` (1,000) or `m` (1,000,000) suffixes. Outer whitespace and
@@ -97,13 +97,13 @@ All package-specific exceptions below inherit from `ContextCraftError`.
 Validation errors from Pydantic and errors from external dependencies may also
 propagate; they are not all wrapped in this hierarchy.
 
-| Exception | Meaning |
-| :--- | :--- |
-| `ContextCraftError` | Base package exception |
-| `RepositoryNotFoundError` | Repository path is missing or is not a directory |
-| `InvalidBudgetError` | Unsupported budget type, format, or non-positive value |
-| `ASTParseError` | AST parsing error type |
-| `CompilationError` | Compilation error type |
+| Exception                 | Meaning                                                |
+| :------------------------ | :----------------------------------------------------- |
+| `ContextCraftError`       | Base package exception                                 |
+| `RepositoryNotFoundError` | Repository path is missing or is not a directory       |
+| `InvalidBudgetError`      | Unsupported budget type, format, or non-positive value |
+| `ASTParseError`           | AST parsing error type                                 |
+| `CompilationError`        | Compilation error type                                 |
 
 These exceptions are importable directly from `contextcraft`. Parser errors
 may instead be represented by `ParsedAst.has_errors`; do not assume every

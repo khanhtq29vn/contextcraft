@@ -11,69 +11,69 @@ and the Python API; they are not CLI flags.
 
 ### Programming languages
 
-| Language | Registry ID | Extensions | Exact filenames |
-| :--- | :--- | :--- | :--- |
-| JavaScript / JSX | `javascript` | `.js`, `.mjs`, `.cjs`, `.jsx` | |
-| Python | `python` | `.py`, `.pyi` | |
-| TypeScript | `typescript` | `.ts`, `.cts`, `.mts` | |
-| TSX | `tsx` | `.tsx` | |
-| Rust | `rust` | `.rs` | |
-| Go | `go` | `.go` | |
-| Java | `java` | `.java` | |
-| C | `c` | `.c`, `.h` | |
-| C++ | `cpp` | `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, `.hh`, `.hxx` | |
-| C# | `csharp` | `.cs` | |
-| Ruby | `ruby` | `.rb`, `.rake`, `.gemspec` | `Gemfile`, `Rakefile`, `Guardfile` |
-| PHP | `php` | `.php`, `.phtml` | |
-| Swift | `swift` | `.swift` | |
-| Kotlin | `kotlin` | `.kt`, `.kts` | |
-| Scala | `scala` | `.scala` | |
-| Lua | `lua` | `.lua` | |
-| R | `r` | `.r`, `.R` | |
-| Bash / shell | `bash` | `.sh`, `.bash`, `.zsh` | |
+| Language         | Registry ID  | Extensions                                         | Exact filenames                    |
+| :--------------- | :----------- | :------------------------------------------------- | :--------------------------------- |
+| JavaScript / JSX | `javascript` | `.js`, `.mjs`, `.cjs`, `.jsx`                      |                                    |
+| Python           | `python`     | `.py`, `.pyi`                                      |                                    |
+| TypeScript       | `typescript` | `.ts`, `.cts`, `.mts`                              |                                    |
+| TSX              | `tsx`        | `.tsx`                                             |                                    |
+| Rust             | `rust`       | `.rs`                                              |                                    |
+| Go               | `go`         | `.go`                                              |                                    |
+| Java             | `java`       | `.java`                                            |                                    |
+| C                | `c`          | `.c`, `.h`                                         |                                    |
+| C++              | `cpp`        | `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, `.hh`, `.hxx` |                                    |
+| C#               | `csharp`     | `.cs`                                              |                                    |
+| Ruby             | `ruby`       | `.rb`, `.rake`, `.gemspec`                         | `Gemfile`, `Rakefile`, `Guardfile` |
+| PHP              | `php`        | `.php`, `.phtml`                                   |                                    |
+| Swift            | `swift`      | `.swift`                                           |                                    |
+| Kotlin           | `kotlin`     | `.kt`, `.kts`                                      |                                    |
+| Scala            | `scala`      | `.scala`                                           |                                    |
+| Lua              | `lua`        | `.lua`                                             |                                    |
+| R                | `r`          | `.r`, `.R`                                         |                                    |
+| Bash / shell     | `bash`       | `.sh`, `.bash`, `.zsh`                             |                                    |
 
 ### Structured data and markup
 
-| Format | Registry ID | Extensions | Exact filenames |
-| :--- | :--- | :--- | :--- |
-| JSON | `json` | `.json` | |
-| YAML | `yaml` | `.yaml`, `.yml` | |
-| TOML | `toml` | `.toml` | |
-| HTML | `html` | `.html`, `.htm` | |
-| CSS | `css` | `.css` | |
-| SCSS | `scss` | `.scss` | |
+| Format | Registry ID | Extensions      | Exact filenames |
+| :----- | :---------- | :-------------- | :-------------- |
+| JSON   | `json`      | `.json`         |                 |
+| YAML   | `yaml`      | `.yaml`, `.yml` |                 |
+| TOML   | `toml`      | `.toml`         |                 |
+| HTML   | `html`      | `.html`, `.htm` |                 |
+| CSS    | `css`       | `.css`          |                 |
+| SCSS   | `scss`      | `.scss`         |                 |
 
 ### Schemas and documents
 
-| Format | Registry ID | Extensions | Exact filenames |
-| :--- | :--- | :--- | :--- |
-| SQL | `sql` | `.sql` | |
-| Markdown | `markdown` | `.md`, `.mdx` | |
-| reStructuredText | `rst` | `.rst` | |
-| Protocol Buffers | `protobuf` | `.proto` | |
-| GraphQL | `graphql` | `.graphql`, `.gql` | |
-| HCL / Terraform | `hcl` | `.hcl`, `.tf`, `.tfvars` | |
+| Format           | Registry ID | Extensions               | Exact filenames |
+| :--------------- | :---------- | :----------------------- | :-------------- |
+| SQL              | `sql`       | `.sql`                   |                 |
+| Markdown         | `markdown`  | `.md`, `.mdx`            |                 |
+| reStructuredText | `rst`       | `.rst`                   |                 |
+| Protocol Buffers | `protobuf`  | `.proto`                 |                 |
+| GraphQL          | `graphql`   | `.graphql`, `.gql`       |                 |
+| HCL / Terraform  | `hcl`       | `.hcl`, `.tf`, `.tfvars` |                 |
 
 ### Build files
 
-| Format | Registry ID | Extensions | Exact filenames |
-| :--- | :--- | :--- | :--- |
-| Dockerfile | `dockerfile` | | `Dockerfile`, `dockerfile` |
-| Make | `make` | | `Makefile`, `makefile`, `justfile` |
-| CMake | `cmake` | `.cmake` | `CMakeLists.txt` |
+| Format     | Registry ID  | Extensions | Exact filenames                    |
+| :--------- | :----------- | :--------- | :--------------------------------- |
+| Dockerfile | `dockerfile` |            | `Dockerfile`, `dockerfile`         |
+| Make       | `make`       |            | `Makefile`, `makefile`, `justfile` |
+| CMake      | `cmake`      | `.cmake`   | `CMakeLists.txt`                   |
 
 ## Detection and fallback
 
 ContextCraft checks the exact filename first, then the file extension. It does
 not guess the language from the file's contents or shebang.
 
-| Example file | What happens |
-| :--- | :--- |
-| `src/app.JS` | Uses JavaScript. Extension matching ignores letter case. |
-| `Dockerfile` | Uses the Dockerfile parser because the filename is registered. |
-| `include/service.h` | Tries C before C++, then uses the first parser that accepts the file without errors. If both accept it, C wins. |
-| `notes.unknown` | Uses `text` and keeps the source unchanged. |
-| `script` with a Python shebang | Uses `text`, unless that exact filename is registered. |
+| Example file                   | What happens                                                                                                    |
+| :----------------------------- | :-------------------------------------------------------------------------------------------------------------- |
+| `src/app.JS`                   | Uses JavaScript. Extension matching ignores letter case.                                                        |
+| `Dockerfile`                   | Uses the Dockerfile parser because the filename is registered.                                                  |
+| `include/service.h`            | Tries C before C++, then uses the first parser that accepts the file without errors. If both accept it, C wins. |
+| `notes.unknown`                | Uses `text` and keeps the source unchanged.                                                                     |
+| `script` with a Python shebang | Uses `text`, unless that exact filename is registered.                                                          |
 
 If no parser accepts a file, ContextCraft keeps the source rather than removing
 code it cannot safely understand. The file is still labeled with its first
@@ -102,12 +102,12 @@ built-in exclusions.
 Every analyzed file has four candidate representations. The optimizer chooses
 one under the output token budget.
 
-| Tier | Representation |
-| :--- | :--- |
-| `FULL` | Complete sanitized source. |
-| `SKEL` | Language-specific structural skeleton, where safe elision is available. |
+| Tier   | Representation                                                            |
+| :----- | :------------------------------------------------------------------------ |
+| `FULL` | Complete sanitized source.                                                |
+| `SKEL` | Language-specific structural skeleton, where safe elision is available.   |
 | `SIGS` | Declaration summary or JSON name/kind outline, depending on the language. |
-| `TREE` | Directory-tree entry without file content. |
+| `TREE` | Directory-tree entry without file content.                                |
 
 ### Skeleton behavior
 
@@ -227,9 +227,7 @@ class CustomSignaturesBuilder(SignaturesBuilder):
         headers = [
             parsed.text(symbol.signature_range)
             for symbol in parsed.symbols
-            if symbol.kind == "function"
-            and symbol.is_public
-            and symbol.parent is None
+            if symbol.kind == "function" and symbol.is_public and symbol.parent is None
         ]
         return "\n".join(headers) + "\n" if headers else ""
 
@@ -241,9 +239,7 @@ class ProjectJavaScript(JavaScriptLanguage):
 
 registry = LanguageRegistry()
 for language in default_registry().languages:
-    registry.register(
-        ProjectJavaScript if language is JavaScriptLanguage else language
-    )
+    registry.register(ProjectJavaScript if language is JavaScriptLanguage else language)
 
 compiler = ContextCraft(registry=registry)
 result = compiler.compile("./my-repo")

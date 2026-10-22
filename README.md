@@ -17,7 +17,7 @@
 
 ## Why ContextCraft?
 
-Existing repository packers (`repomix`, `gitingest`, `code2prompt`) blindly concatenate every file verbatim. On real-world repositories, this blows past LLM context budgets, buries critical architecture inside thousands of lines of boilerplate (*Lost-in-the-Middle* degradation), and wastes API tokens.
+Existing repository packers (`repomix`, `gitingest`, `code2prompt`) blindly concatenate every file verbatim. On real-world repositories, this blows past LLM context budgets, buries critical architecture inside thousands of lines of boilerplate (_Lost-in-the-Middle_ degradation), and wastes API tokens.
 
 **`ContextCraft` is the AST-aware "MarkItDown for Codebases."** Instead of naive concatenation or arbitrary character truncation, `ContextCraft` parses your codebase with **Tree-sitter**, ranks every file's architectural importance via **Personalized PageRank** on the cross-file dependency graph, and solves a **Multiple-Choice Knapsack Problem (MCKP)** across 4 AST fidelity tiers (`FULL`, `SKEL`, `SIGS`, `TREE`) to pack maximum architectural signal into your exact token budget $B$.
 
@@ -124,12 +124,12 @@ Evaluated using `benchmarks/run_benchmark.py` (`--focus "AST elision knapsack op
 
 - **Raw Uncompressed Repository (`repomix` / verbatim concatenation baseline):** `43,151` tokens (`1.00x`)
 
-| Method | Target Budget ($B$) | Emitted Tokens | Compression Ratio | Public API Signature Coverage | Budget Compliant |
-| :--- | ---: | ---: | ---: | ---: | :---: |
-| **Naive Prefix Truncation** | `4,000` | `4,000` | `10.79x` | `18.4%` | YES (Loses 81% of repo) |
-| **ContextCraft (Ours)** | `4,000` | `3,950` | **`10.92x`** | **`70.9%`** | **YES (`98.8%` utilization)** |
-| **Naive Prefix Truncation** | `6,000` | `6,000` | `7.19x` | `31.6%` | YES (Loses 68% of repo) |
-| **ContextCraft (Ours)** | `6,000` | `5,940` | **`7.26x`** | **`94.3%`** | **YES (`99.0%` utilization)** |
+| Method                      | Target Budget ($B$) | Emitted Tokens | Compression Ratio | Public API Signature Coverage |       Budget Compliant        |
+| :-------------------------- | ------------------: | -------------: | ----------------: | ----------------------------: | :---------------------------: |
+| **Naive Prefix Truncation** |             `4,000` |        `4,000` |          `10.79x` |                       `18.4%` |    YES (Loses 81% of repo)    |
+| **ContextCraft (Ours)**     |             `4,000` |        `3,950` |      **`10.92x`** |                   **`70.9%`** | **YES (`98.8%` utilization)** |
+| **Naive Prefix Truncation** |             `6,000` |        `6,000` |           `7.19x` |                       `31.6%` |    YES (Loses 68% of repo)    |
+| **ContextCraft (Ours)**     |             `6,000` |        `5,940` |       **`7.26x`** |                   **`94.3%`** | **YES (`99.0%` utilization)** |
 
 ---
 

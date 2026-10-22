@@ -12,6 +12,7 @@ We actively maintain and provide security updates for the latest minor release o
 ## Built-In Security Guarantees
 
 `ContextCraft` is designed as a **local-first, zero-telemetry compiler**:
+
 1. **No External Data Transmission:** `ContextCraft` never uploads your source code or repository metadata to any external server.
 2. **Pre-AST Secret Scrubbing (`SecretSanitizer`):** By default, API keys (`sk-proj-...`, `sk-ant-...`, `AKIA...`, `ghp_...`, `AIza...`), PEM private key blocks, `.env` secrets, and high-entropy credentials are automatically scrubbed before AST parsing and output emission.
 
