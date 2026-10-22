@@ -11,6 +11,7 @@ contextcraft [PATH] [OPTIONS]
 | Flag | Description | Default |
 | :--- | :--- | :--- |
 | `--budget`, `-b` | Strict token budget (`4k`, `16k`, `32k`, `128k`, or integer) | `32k` |
+| `--encoding`, `-enc` | Tiktoken encoding name used for token accounting (e.g. `cl100k_base`, `o200k_base`) | `cl100k_base` |
 | `--focus`, `-f` | Natural-language query or symbol keywords for Personalized PageRank | `None` |
 | `--focus-file` | Relative file path or glob to boost in PageRank (repeatable) | `[]` |
 | `--format`, `-m` | Target output format: `markdown`, `xml`, or `json` | `markdown` |

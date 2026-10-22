@@ -32,6 +32,9 @@ uv run contextcraft . --budget 4k --focus "AST elision and knapsack optimizer" -
 
 # Emit Anthropic Claude-optimized <repository_context> XML and copy to clipboard
 uv run contextcraft . --budget 32k --format xml --copy
+
+# Account tokens with a different tiktoken encoding (default is cl100k_base)
+uv run contextcraft . --budget 8k --encoding o200k_base -o context.md
 ```
 
 ### 2. Python SDK (Modeled after `microsoft/markitdown`)
