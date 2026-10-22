@@ -63,7 +63,7 @@ class SecretMatch(BaseModel):
     masked_preview: str = Field()
 
 
-_BUDGET_SHORTHAND_RE = re.compile("^\\s*(\\d+(?:\\.\\d+)?)\\s*([kKmM]?)\\s*$")
+_BUDGET_SHORTHAND_RE = re.compile(r"(\d+(?:\.\d+)?)\s*([kKmM]?)")
 
 
 class CompilationConfig(BaseModel):
@@ -92,7 +92,7 @@ class CompilationConfig(BaseModel):
             if raw_budget <= 0:
                 raise InvalidBudgetError(f"Token budget must be positive, got {raw_budget}.")
             return raw_budget
-        match = _BUDGET_SHORTHAND_RE.match(str(raw_budget))
+        match = _BUDGET_SHORTHAND_RE.fullmatch(raw_budget.strip())
         if not match:
             raise InvalidBudgetError(
                 f"Invalid token budget format '{raw_budget}'. Examples: '16k', '32000', '128k'."

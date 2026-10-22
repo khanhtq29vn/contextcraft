@@ -73,17 +73,25 @@ def test_web_relative_paths_use_the_configured_root(sample_repo: Path) -> None:
     assert any(file["rel_path"] == "src/auth/models.py" for file in response.json()["files"])
 
 
-@pytest.mark.parametrize("kind", ["absolute", "traversal", "prefix_collision"])
+@pytest.mark.parametrize(
+    "kind", ["absolute", "traversal", "normalized_traversal", "parent", "prefix_collision"]
+)
 def test_web_rejects_paths_outside_the_configured_root(web_root: Path, kind: str) -> None:
     sources = {
         "absolute": str(web_root.parent / "outside"),
         "traversal": "../outside",
+        "normalized_traversal": "missing/../../outside",
+        "parent": "..",
         "prefix_collision": str(web_root) + "-outside",
     }
-    with patch("web.app.ContextCraft.compile") as compile_repository:
+    with (
+        patch("web.app.Path") as construct_path,
+        patch("web.app.ContextCraft.compile") as compile_repository,
+    ):
         response = client.post("/api/compile", json={"source": sources[kind]})
 
     assert response.status_code == 403
+    construct_path.assert_not_called()
     compile_repository.assert_not_called()
     assert str(web_root) not in response.json()["detail"]
 
@@ -107,10 +115,14 @@ def test_web_allows_symlinks_within_the_configured_root(web_root: Path, sample_r
 
 
 def test_web_rejects_invalid_path_values() -> None:
-    with patch("web.app.ContextCraft.compile") as compile_repository:
+    with (
+        patch("web.app.Path") as construct_path,
+        patch("web.app.ContextCraft.compile") as compile_repository,
+    ):
         response = client.post("/api/compile", json={"source": "invalid\x00path"})
 
     assert response.status_code == 400
+    construct_path.assert_not_called()
     compile_repository.assert_not_called()
 
 
@@ -160,3 +172,37 @@ def test_web_rejects_unsafe_github_slugs(owner: str, repo: str) -> None:
         _clone_and_compile_github_repo(ContextCraft(), owner=owner, repo=repo)
 
     clone_process.assert_not_called()
+
+
+def test_web_normalizes_relative_paths_inside_the_root(sample_repo: Path) -> None:
+    source = f"{sample_repo.name}/../{sample_repo.name}"
+
+    response = client.post("/api/compile", json={"source": source, "budget": "1k"})
+
+    assert response.status_code == 200
+    assert any(file["rel_path"] == "src/auth/models.py" for file in response.json()["files"])
+
+
+def test_web_expands_home_paths_inside_the_root(
+    web_root: Path, sample_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(web_root))
+    monkeypatch.setenv("USERPROFILE", str(web_root))
+
+    response = client.post("/api/compile", json={"source": f"~/{sample_repo.name}", "budget": "1k"})
+
+    assert response.status_code == 200
+    assert any(file["rel_path"] == "src/auth/models.py" for file in response.json()["files"])
+
+
+def test_web_rejects_paths_on_another_drive_before_constructing_a_path() -> None:
+    with (
+        patch("web.app.os.path.relpath", side_effect=ValueError("different drives")),
+        patch("web.app.Path") as construct_path,
+        patch("web.app.ContextCraft.compile") as compile_repository,
+    ):
+        response = client.post("/api/compile", json={"source": "another-drive"})
+
+    assert response.status_code == 403
+    construct_path.assert_not_called()
+    compile_repository.assert_not_called()
