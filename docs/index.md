@@ -8,28 +8,35 @@
 
 ```bash
 # Run instantly without installing via uvx:
-uvx contextcraft-ai . --budget 16k --focus "AST elision and knapsack optimizer" -o context.md
+uvx contextcraft-ai . --budget 8k --focus "AST elision knapsack optimizer pagerank" -o context.md
 
 # Or install globally / in your virtual environment from PyPI:
 pip install contextcraft-ai
-contextcraft . --budget 32k --format xml --copy
+contextcraft . --budget 16k --format xml --copy
 ```
 
 ## Quickstart
 
 ```bash
-# Compress the current repository into a strict 16,000-token budget
-uv run contextcraft . --budget 16k --focus "authentication flow" -o context.md
+# Compress the current repository into a strict 8,000-token budget
+uv run contextcraft . --budget 8k --focus "authentication flow" --encoding o200k_base -o context.md
 ```
 
-## Python SDK (3 Lines of Code)
+## Python SDK (Single-Pass & Reusable Snapshot)
 
 ```python
-from contextcraft import ContextCraft
+from contextcraft import ContextCraft, OutputFormat
 
-cc = ContextCraft(budget_tokens="32k")
-result = cc.compile("./my-repo", focus_query="AST elision and knapsack optimizer")
+cc = ContextCraft(focus_query="AST elision and knapsack optimizer")
+
+# Single-call compilation:
+result = cc.compile("./my-repo", budget_tokens="16k")
 print(result.markdown)
+
+# Or analyze once and render multiple budgets in milliseconds:
+snapshot = cc.analyze("./my-repo")
+small = snapshot.render(budget_tokens="4k")
+large = snapshot.render(budget_tokens="32k", output_format=OutputFormat.XML)
 ```
 
 ```{toctree}

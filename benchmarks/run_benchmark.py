@@ -10,7 +10,7 @@ Outputs both:
 - A publication-ready LaTeX `booktabs` table (for ACL / EMNLP / ICSE System Demo papers)
 
 Usage:
-    uv run python benchmarks/run_benchmark.py . --focus "AST elision knapsack pagerank"
+    uv run python benchmarks/run_benchmark.py . --focus "AST elision knapsack optimizer pagerank"
 """
 
 from __future__ import annotations
@@ -134,7 +134,7 @@ def format_markdown_table(rows: list[BenchmarkRow], raw_tokens: int) -> str:
         "",
         f"- **Uncompressed Repository Baseline (`repomix` / raw concatenation):** `{raw_tokens:,}` tokens (`1.00x`, overflows tight context budgets)",
         "",
-        "| Method | Target Budget ($B$) | Emitted Tokens | Compression Ratio | Core Symbol Retention | Public API Signature Coverage | Budget Compliant |",
+        "| Method | Target Budget (`B`) | Emitted Tokens | Compression Ratio | Core Symbol Retention | Public API Signature Coverage | Budget Compliant |",
         "| :--- | ---: | ---: | ---: | ---: | ---: | :---: |",
     ]
     for r in rows:
@@ -222,7 +222,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--budgets",
-        default="2500,4000,6000",
+        default="4000,6000,8000,12000,16000",
         help="Comma-separated token budgets to evaluate.",
     )
     args = parser.parse_args()
