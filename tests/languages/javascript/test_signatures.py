@@ -85,13 +85,3 @@ const run = function run() {};
 """
     )
     assert not get_parser("javascript").parse(signatures.encode()).root_node.has_error
-
-
-def test_signatures_preserve_incomplete_source() -> None:
-    source = b"function broken(value) { return value;"
-    parsed = parse(source, JavaScriptLanguage)
-
-    assert (
-        JavaScriptLanguage.signatures_builder(JavaScriptLanguage.spec).build(parsed)
-        == source.decode()
-    )

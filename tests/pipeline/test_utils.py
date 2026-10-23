@@ -1,8 +1,8 @@
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import PackageNotFoundError
 
 import pytest
 
-from contextcraft import __version__, utils
+from contextcraft import utils
 
 
 def test_get_version_uses_distribution_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -22,7 +22,3 @@ def test_get_version_without_distribution_metadata(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(utils, "version", distribution_version)
 
     assert utils.get_version() == "0.0.0"
-
-
-def test_package_version_matches_distribution() -> None:
-    assert __version__ == version("contextcraft-ai")

@@ -8,10 +8,11 @@ from contextcraft.ast.parser import parse
 from contextcraft.languages.builtin import default_registry
 
 
+@pytest.mark.parametrize("language_id", ["ruby", "markdown", "protobuf"])
 def test_missing_grammars_preserve_source(
-    language_case: tuple[str, str, bytes, str, list[str]],
+    language_sources: dict[str, bytes], language_id: str
 ) -> None:
-    language_id, _, source, _, _ = language_case
+    source = language_sources[language_id]
     language = default_registry().get(language_id)
     assert language is not None
     with patch("contextcraft.ast.parser.get_parser", side_effect=RuntimeError("unavailable")):

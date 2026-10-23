@@ -18,6 +18,12 @@ from contextcraft.scanner import RepositoryScanner, ScanOutcome
 
 
 class ContextCraft:
+    """Compile repositories into ranked, token-budgeted context artifacts.
+
+    A supplied config is copied and takes precedence over constructor options.
+    Per-call overrides apply to a copy, leaving the instance config unchanged.
+    """
+
     def __init__(
         self,
         config: CompilationConfig | None = None,
@@ -35,10 +41,10 @@ class ContextCraft:
         tokenizer_encoding: str = "cl100k_base",
     ) -> None:
         self.registry = registry if registry is not None else default_registry()
-        self.config = (
-            config.model_copy(deep=True)
-            if config is not None
-            else CompilationConfig(
+        if config is not None:
+            self.config = config.model_copy(deep=True)
+        else:
+            self.config = CompilationConfig(
                 budget_tokens=CompilationConfig.parse_budget(budget_tokens),
                 focus_query=focus_query,
                 focus_files=list(focus_files or []),
@@ -50,7 +56,6 @@ class ContextCraft:
                 max_file_size_bytes=max_file_size_bytes,
                 tokenizer_encoding=tokenizer_encoding,
             )
-        )
 
     def compile(
         self,
@@ -64,6 +69,12 @@ class ContextCraft:
         exclude_patterns: list[str] | None = None,
         redact_secrets: bool | None = None,
     ) -> CompilationResult:
+        """Scan, sanitize, rank, and render a repository within the token budget.
+
+        None overrides retain the configured values. Formatting verifies the
+        emitted token count and may lower the optimizer's selected fidelities.
+        An impossibly small XML budget raises InvalidBudgetError.
+        """
         start = time.perf_counter()
         config = self._effective_config(
             budget_tokens=budget_tokens,
@@ -97,6 +108,10 @@ class ContextCraft:
         focus_query: str | None = None,
         focus_files: list[str] | None = None,
     ) -> list[FileAnalysis]:
+        """Return path-sorted analyses with ranked files and all rendered tiers.
+
+        No budget allocation is performed; selected fidelities remain TREE.
+        """
         config = self._effective_config(focus_query=focus_query, focus_files=focus_files)
         return self._analyze(repo_path, config)[1]
 
@@ -110,19 +125,17 @@ class ContextCraft:
         elider = Elider(counter)
         files: list[FileAnalysis] = []
         for scanned in outcome.files:
-            content = scanned.source.decode("utf-8")
-            sanitized = (
-                SecretSanitizer.sanitize_detailed(content, scanned.rel_path)
-                if config.redact_secrets
-                else None
-            )
-            source = (
-                sanitized.sanitized_content.encode("utf-8")
-                if sanitized is not None
-                else scanned.source
-            )
+            source = scanned.source
+            sanitized = None
+            if config.redact_secrets:
+                sanitized = SecretSanitizer.sanitize_detailed(
+                    source.decode("utf-8"), scanned.rel_path
+                )
+                source = sanitized.sanitized_content.encode("utf-8")
+
             language: type[Language] = TextLanguage
             parsed = ParsedAst(source=source)
+            # Shared extensions use the first valid parser, or the first candidate on errors.
             for index, candidate in enumerate(scanned.candidates):
                 candidate_ast = parse(source, candidate)
                 if index == 0 or not candidate_ast.has_errors:

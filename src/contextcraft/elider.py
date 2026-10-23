@@ -33,6 +33,12 @@ class RenderedTier:
 
 
 class TokenCounter:
+    """Count with tiktoken, using deterministic estimates if loading or encoding fails.
+
+    Unknown encoding names raise ValueError rather than silently falling back.
+    Offline estimates are not guaranteed to match the requested tokenizer.
+    """
+
     _FALLBACK_TOKEN_RE: ClassVar[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_]+|[^\sA-Za-z0-9_]")
 
     def __init__(self, encoding_name: str = "cl100k_base") -> None:
@@ -73,6 +79,11 @@ class Elider:
         parsed: ParsedAst,
         language: type[Language],
     ) -> dict[FidelityLevel, RenderedTier]:
+        """Build tiers with nondecreasing token costs from TREE through FULL.
+
+        Empty or more expensive summaries reuse the next higher tier. FULL is
+        the exact parsed source, which the caller should sanitize before parsing.
+        """
         source = parsed.source.decode("utf-8")
         higher_tier = RenderedTier(source, self.token_counter.count(source))
         tiers = {

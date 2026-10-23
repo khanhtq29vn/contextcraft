@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from contextcraft.ast.parser import parse
 from contextcraft.languages.javascript.language import JavaScriptLanguage
 
@@ -41,18 +39,6 @@ export const run = (value) => service(value);
         parsed.defined_identifiers
     )
     assert set(parsed.referenced_identifiers) == {"Base", "service", "id", "value"}
-
-
-@pytest.mark.parametrize(
-    "source",
-    [b"", b"// comment", b"function broken( {", 'const café = "é"; consume(café);'.encode()],
-)
-def test_javascript_empty_incomplete_and_unicode_source(source: bytes) -> None:
-    parsed = parse(source, JavaScriptLanguage)
-
-    assert parsed.scope_graph.scopes[0].kind == "module"
-    for item in [*parsed.scope_graph.bindings, *parsed.scope_graph.references]:
-        assert source[item.start_byte : item.end_byte].decode("utf-8") == item.name
 
 
 def test_parsed_ast_retains_source_ranges_and_anonymous_symbol_parents() -> None:

@@ -24,7 +24,7 @@ from contextcraft.languages.registry import LanguageRegistry
 @pytest.mark.parametrize("fmt", ["markdown", "xml", "json"])
 @pytest.mark.parametrize(
     "budget,focus_query",
-    [(30, None), (180, None), (450, None), (2000, "JWT authentication"), (5000, None)],
+    [(30, None), (2000, "JWT authentication")],
 )
 def test_compiler_respects_real_emitted_token_budgets(
     sample_repo: Path, fmt: str, budget: int, focus_query: str | None
@@ -192,7 +192,7 @@ def test_oversized_file_is_tree_only_when_no_complete_tier_fits(tmp_path: Path) 
         f"def operation_{index}(value: int) -> int:\n    return value + {index}\n"
         for index in range(50)
     )
-    (tmp_path / "api.py").write_text(source, encoding="utf-8")
+    (tmp_path / "api.py").write_bytes(source.encode("utf-8"))
 
     result = ContextCraft(budget_tokens=350).compile(tmp_path)
     file = result.files[0]

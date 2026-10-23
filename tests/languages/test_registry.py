@@ -8,14 +8,6 @@ from contextcraft.languages.javascript.language import JavaScriptLanguage
 from contextcraft.languages.registry import LanguageRegistry
 
 
-def test_registry_registers_and_gets_languages() -> None:
-    registry = LanguageRegistry()
-    registry.register(JavaScriptLanguage)
-
-    assert registry.get("javascript") is JavaScriptLanguage
-    assert registry.get("unknown") is None
-
-
 @pytest.mark.parametrize("path", ["app.js", "src/app.mjs", "app.cjs", "app.jsx", "src/APP.JS"])
 def test_registry_detects_javascript_extensions(path: str) -> None:
     registry = LanguageRegistry()

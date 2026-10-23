@@ -20,6 +20,8 @@ from contextcraft.optimizer import TokenBudgetOptimizer
 
 
 class ArtifactFormatter:
+    """Render selected tiers and verify the complete artifact's token budget."""
+
     def __init__(
         self,
         config: CompilationConfig,
@@ -40,41 +42,13 @@ class ArtifactFormatter:
         ignored_files_skipped: int,
         execution_time_ms: float,
     ) -> CompilationResult:
-        root = Path(root_path).resolve()
-        optimizer = TokenBudgetOptimizer(self.config)
-        while True:
-            tree = self.render_budgeted_directory_tree(files, root.name)
-            content = self._render(root.name, files, tree)
-            overflow_tokens = self.token_counter.count(content) - self.config.budget_tokens
-            if overflow_tokens <= 0:
-                break
-            active = [file for file in files if file.selected_fidelity > FidelityLevel.TREE]
-            if not active:
-                content = self._minimal(root.name, files)
-                break
-            downgrades: list[tuple[float, str, FidelityLevel, FileAnalysis]] = []
-            for file in active:
-                current_value = optimizer.tier_utility(file, file.selected_fidelity)
-                for level in FidelityLevel:
-                    if level >= file.selected_fidelity:
-                        continue
-                    saved_tokens = file.selected_tokens - file.tiers[level].tokens
-                    if level == FidelityLevel.TREE:
-                        saved_tokens += TokenBudgetOptimizer.FILE_WRAPPER_OVERHEAD_TOKENS
-                    if saved_tokens <= 0:
-                        continue
-                    loss = current_value - optimizer.tier_utility(file, level)
-                    downgrades.append(
-                        (
-                            loss / min(saved_tokens, overflow_tokens),
-                            file.rel_path,
-                            level,
-                            file,
-                        )
-                    )
-            _, _, level, file = min(downgrades, key=lambda item: item[:3])
-            file.selected_fidelity = level
+        """Render an artifact and compute statistics from its final allocation.
 
+        Selected fidelities may be lowered to fit format overhead. Signature
+        coverage is estimated from final tiers, not measured by reparsing output.
+        """
+        root = Path(root_path).resolve()
+        content, tree = self._render_within_budget(root.name, files)
         count = self.token_counter.count(content)
         raw = sum(file.raw_tokens for file in files)
         counts = dict.fromkeys((level.badge for level in FidelityLevel), 0)
@@ -110,6 +84,47 @@ class ArtifactFormatter:
             execution_time_ms=execution_time_ms,
         )
         return CompilationResult(str(root), self.config.output_format, content, stats, files)
+
+    def _render_within_budget(self, name: str, files: list[FileAnalysis]) -> tuple[str, str]:
+        """Return content and tree, minimizing utility lost per needed token.
+
+        Each iteration recounts the entire artifact because wrapper and escaping
+        costs differ by format. Tree-only output falls back to a minimal document.
+        """
+        optimizer = TokenBudgetOptimizer(self.config)
+        while True:
+            tree = self.render_budgeted_directory_tree(files, name)
+            content = self._render(name, files, tree)
+            overflow_tokens = self.token_counter.count(content) - self.config.budget_tokens
+            if overflow_tokens <= 0:
+                return content, tree
+
+            active = [file for file in files if file.selected_fidelity > FidelityLevel.TREE]
+            if not active:
+                return self._minimal(name, files), tree
+
+            downgrades: list[tuple[float, str, FidelityLevel, FileAnalysis]] = []
+            for file in active:
+                current_value = optimizer.tier_utility(file, file.selected_fidelity)
+                for level in FidelityLevel:
+                    if level >= file.selected_fidelity:
+                        continue
+                    saved_tokens = file.selected_tokens - file.tiers[level].tokens
+                    if level == FidelityLevel.TREE:
+                        saved_tokens += TokenBudgetOptimizer.FILE_WRAPPER_OVERHEAD_TOKENS
+                    if saved_tokens <= 0:
+                        continue
+                    loss = current_value - optimizer.tier_utility(file, level)
+                    downgrades.append(
+                        (
+                            loss / min(saved_tokens, overflow_tokens),
+                            file.rel_path,
+                            level,
+                            file,
+                        )
+                    )
+            _, _, level, file = min(downgrades, key=lambda item: item[:3])
+            file.selected_fidelity = level
 
     def _render(self, name: str, files: list[FileAnalysis], tree: str) -> str:
         ranked = sorted(files, key=lambda file: (-file.pagerank_score, file.rel_path))
@@ -256,14 +271,14 @@ class ArtifactFormatter:
 
     @staticmethod
     def _fence(content: str) -> str:
-        return "`" * max(
-            3, max((len(match) + 1 for match in re.findall(r"`+", content)), default=0)
-        )
+        """Choose a Markdown fence longer than any backtick run in the content."""
+        longest_run = max((len(run) for run in re.findall(r"`+", content)), default=0)
+        return "`" * max(3, longest_run + 1)
 
     def render_budgeted_directory_tree(
         self, files: list[FileAnalysis], root_name: str = "."
     ) -> str:
-        # Navigation must not crowd source code out of small context windows.
+        """Use at most 10% of the budget, favoring ranked paths if the tree is too large."""
         max_tokens = self.config.budget_tokens // 10
         tree = self.render_directory_tree(files, root_name)
         if self.token_counter.count(tree) <= max_tokens:

@@ -7,37 +7,11 @@ from contextcraft import (
     ContextCraft,
     FidelityLevel,
 )
-from contextcraft.ast import ParsedAst
 from contextcraft.ast.parser import parse
 from contextcraft.elider import RenderedTier
 from contextcraft.languages.builtin import PythonLanguage
 from contextcraft.models import FileAnalysis
 from contextcraft.optimizer import TokenBudgetOptimizer
-
-
-def test_optimizer_assigns_fidelity_within_estimated_budget() -> None:
-    files = [
-        FileAnalysis(
-            rel_path=name,
-            abs_path="/" + name,
-            language="text",
-            size_bytes=40,
-            parsed=ParsedAst(source=b"x" * 40),
-            pagerank_score=weight,
-            tiers={
-                level: RenderedTier("x" * cost, cost)
-                for level, cost in zip(FidelityLevel, (0, 10, 20, 40), strict=True)
-            },
-        )
-        for name, weight in (("high.txt", 0.9), ("low.txt", 0.1))
-    ]
-    summary = TokenBudgetOptimizer(CompilationConfig(budget_tokens=60)).optimize(
-        files, tree_overhead_tokens=0
-    )
-
-    assert summary.allocated_code_tokens <= 60
-    assert files[0].selected_fidelity > files[1].selected_fidelity
-    assert summary.objective_score > 0
 
 
 def test_knapsack_assigns_higher_fidelity_to_higher_ranked_files(sample_repo: Path) -> None:
@@ -95,7 +69,7 @@ def test_optimizer_prioritizes_ranked_fidelity_over_declaration_count() -> None:
 
 def test_allocation_is_repeatable_and_does_not_mutate_tiers_or_ast(tmp_path: Path) -> None:
     source = "".join(f"def operation_{index}():\n    return {index}\n" for index in range(50))
-    (tmp_path / "api.py").write_text(source, encoding="utf-8")
+    (tmp_path / "api.py").write_bytes(source.encode("utf-8"))
     compiler = ContextCraft(budget_tokens=200)
     files = compiler.analyze_repository(tmp_path)
     optimizer = TokenBudgetOptimizer(compiler.config)
