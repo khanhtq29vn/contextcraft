@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import random
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from contextcraft import (
     CompilationConfig,
     ContextCraft,
     FidelityLevel,
 )
+from contextcraft.ast import ParsedAst
 from contextcraft.ast.parser import parse
 from contextcraft.elider import RenderedTier
 from contextcraft.languages.builtin import PythonLanguage
@@ -118,3 +123,74 @@ def test_local_refinement_trades_fidelity_for_higher_total_utility() -> None:
 
     assert used <= 90
     assert all(file.selected_fidelity == FidelityLevel.SIGNATURES for file in files)
+
+
+@pytest.mark.parametrize("seed", range(50))
+def test_indexed_refinement_matches_exhaustive_search(seed: int) -> None:
+    rng = random.Random(seed)
+    files = []
+    for index in range(12):
+        costs = [0, *sorted(rng.choices(range(10, 100, 10), k=3))]
+        files.append(
+            FileAnalysis(
+                str(index),
+                str(index),
+                "text",
+                0,
+                ParsedAst(source=b""),
+                tiers={
+                    level: RenderedTier("", cost)
+                    for level, cost in zip(FidelityLevel, costs, strict=True)
+                },
+                pagerank_score=rng.choice([0.0, 0.1, 0.2, 0.3]),
+                selected_fidelity=rng.choice(list(FidelityLevel)),
+            )
+        )
+    expected = [replace(file) for file in files]
+    optimizer = TokenBudgetOptimizer()
+    used = sum(optimizer._effective_tier_cost(file, file.selected_fidelity) for file in files)
+    budget = used + rng.randrange(50)
+    actual_used = optimizer._local_search_refinement(files, used, budget)
+
+    # Keep an exhaustive oracle to verify affordability, exclusions, and tie order.
+    for _ in range(25):
+        best_gain = 1e-6
+        best_swap = None
+        for down_index, down in enumerate(expected):
+            current_cost = optimizer._effective_tier_cost(down, down.selected_fidelity)
+            current_value = optimizer.tier_utility(down, down.selected_fidelity)
+            for down_level in FidelityLevel:
+                if down_level >= down.selected_fidelity:
+                    continue
+                freed = current_cost - optimizer._effective_tier_cost(down, down_level)
+                if freed <= 0:
+                    continue
+                loss = current_value - optimizer.tier_utility(down, down_level)
+                for up_index, up in enumerate(expected):
+                    if up_index == down_index:
+                        continue
+                    for target in FidelityLevel:
+                        if target <= up.selected_fidelity:
+                            continue
+                        cost = optimizer._effective_tier_cost(
+                            up, target
+                        ) - optimizer._effective_tier_cost(up, up.selected_fidelity)
+                        gain = (
+                            optimizer.tier_utility(up, target)
+                            - optimizer.tier_utility(up, up.selected_fidelity)
+                            - loss
+                        )
+                        if cost <= budget - used + freed and gain > best_gain:
+                            best_gain = gain
+                            best_swap = down_index, down_level, up_index, target, cost - freed
+        if best_swap is None:
+            break
+        down_index, down_level, up_index, target, delta = best_swap
+        expected[down_index].selected_fidelity = down_level
+        expected[up_index].selected_fidelity = target
+        used += delta
+
+    assert actual_used == used <= budget
+    assert [file.selected_fidelity for file in files] == [
+        file.selected_fidelity for file in expected
+    ]

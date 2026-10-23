@@ -28,6 +28,8 @@ class ArtifactFormatter:
         token_counter: TokenCounterProtocol | None = None,
     ) -> None:
         self.config = config
+        self._compact_tree_key: tuple[str, int, tuple[tuple[str, float], ...]] | None = None
+        self._compact_tree = ""
         self.token_counter = (
             token_counter if token_counter is not None else TokenCounter(config.tokenizer_encoding)
         )
@@ -284,6 +286,10 @@ class ArtifactFormatter:
         if self.token_counter.count(tree) <= max_tokens:
             return tree
 
+        key = (root_name, max_tokens, tuple((file.rel_path, file.pagerank_score) for file in files))
+        if key == self._compact_tree_key:
+            return self._compact_tree
+
         header = json.dumps(root_name, ensure_ascii=False) + "/\n"
         lines: list[str] = []
 
@@ -301,6 +307,8 @@ class ArtifactFormatter:
             if self.token_counter.count(candidate) <= max_tokens:
                 lines.append(line)
                 tree = candidate
+        self._compact_tree_key = key
+        self._compact_tree = tree
         return tree
 
     @staticmethod

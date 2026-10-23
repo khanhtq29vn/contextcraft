@@ -4,7 +4,7 @@
 
 ```{eval-rst}
 .. autoclass:: contextcraft.ContextCraft
-   :members: compile, analyze_repository
+   :members: compile, analyze, analyze_repository
    :undoc-members:
 ```
 
@@ -36,6 +36,38 @@ without mutating it. Lists replace rather than extend configured lists. Pass
 The return value is a [CompilationResult](models.md).
 `content` contains the requested output format. The compatibility properties
 `markdown` and `text_content` both return `content`, even for XML or JSON.
+
+### Analyze once, render multiple times
+
+`analyze()` returns an `AnalyzedRepository` snapshot. It scans, sanitizes, parses,
+creates fidelity tiers, and ranks files once. Call `render()` to try different
+budgets or output formats without repeating that work:
+
+```python
+repository = ContextCraft(focus_query="authentication").analyze(".")
+small = repository.render(budget_tokens="4k")
+large = repository.render(budget_tokens="32k", output_format="xml")
+```
+
+Render defaults are copied from the compiler configuration at analysis time.
+Focus, file filters, secret redaction, and tokenizer encoding are fixed for that
+snapshot. Create a new analysis to change these options or pick up disk changes.
+`analyze()` also accepts per-call focus, include/exclude, and redaction overrides.
+
+Each render returns independent file allocation state and does not alter earlier
+results. Parsed ASTs and immutable rendered tiers are shared; treat snapshot files
+and their ASTs as read-only. The snapshot retains analyzed source in memory until
+released, including unredacted source if redaction was disabled. Token-count
+caches belong to the snapshot, not a global repository cache, and retain at most
+256 texts of up to 16,384 characters each.
+
+`render().stats.execution_time_ms` measures allocation and formatting only;
+`compile()` continues to report the complete pipeline's execution time.
+
+```{eval-rst}
+.. autoclass:: contextcraft.AnalyzedRepository
+   :members: render
+```
 
 ### analyze_repository
 

@@ -50,6 +50,33 @@ def test_token_counter_has_deterministic_offline_fallback(text: str) -> None:
         assert first.count(text) >= len(text.encode("utf-8", errors="replace")) // 4
 
 
+def test_token_counter_reuses_counts_and_evicts_old_entries() -> None:
+    encoder = Mock(spec=tiktoken.Encoding)
+    encoder.encode.return_value = [1, 2]
+    with patch("contextcraft.elider.tiktoken.get_encoding", return_value=encoder):
+        counter = TokenCounter()
+
+    assert counter.count("first") == counter.count("first") == 2
+    assert encoder.encode.call_count == 1
+    for index in range(256):
+        counter.count(f"unique {index}")
+    counter.count("first")
+    assert encoder.encode.call_count == 258
+
+
+def test_token_counter_does_not_cache_large_text_or_share_caches() -> None:
+    encoder = Mock(spec=tiktoken.Encoding)
+    encoder.encode.return_value = [1]
+    with patch("contextcraft.elider.tiktoken.get_encoding", return_value=encoder):
+        first = TokenCounter()
+        second = TokenCounter()
+
+    for counter in (first, second):
+        assert counter.count("small") == counter.count("small") == 1
+        assert counter.count("x" * 16_385) == counter.count("x" * 16_385) == 1
+    assert encoder.encode.call_count == 6
+
+
 def test_token_counter_falls_back_when_encoding_fails() -> None:
     encoder = Mock(spec=tiktoken.Encoding)
     encoder.encode.side_effect = RuntimeError("encoding failed")

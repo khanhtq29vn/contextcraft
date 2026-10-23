@@ -63,6 +63,7 @@ class RepositoryScanner:
         if self.config.respect_gitignore and not (root / ".git").is_symlink():
             patterns.extend(self._read_ignore(git_exclude, ""))
         inherited: dict[Path, list[str]] = {root: patterns}
+        specs: dict[tuple[str, ...], pathspec.PathSpec[Any]] = {}
         include = pathspec.PathSpec.from_lines("gitignore", self.config.include_patterns)
         found: list[ScannedFile] = []
         discovered = binary = ignored = 0
@@ -76,10 +77,10 @@ class RepositoryScanner:
             if self.config.respect_gitignore:
                 for name in self._IGNORE_FILENAMES:
                     rules.extend(self._read_ignore(directory / name, prefix))
-            spec: pathspec.PathSpec[Any] = pathspec.PathSpec.from_lines(
-                "gitignore",
-                [*rules, *self.config.exclude_patterns],
-            )
+            key = (*rules, *self.config.exclude_patterns)
+            if key not in specs:
+                specs[key] = pathspec.PathSpec.from_lines("gitignore", key)
+            spec = specs[key]
 
             kept = []
             for name in sorted(dirs):

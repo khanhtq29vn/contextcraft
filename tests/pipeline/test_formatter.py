@@ -126,3 +126,47 @@ def test_overflow_trimming_sacrifices_bodies_before_api_breadth(tmp_path: Path) 
     assert counter.count(result.content) <= 1200
     assert all(file.selected_fidelity > FidelityLevel.TREE for file in files)
     assert result.stats.preserved_signatures_pct == 100
+
+
+def test_compact_tree_cache_ignores_fidelity_but_tracks_tree_inputs(sample_repo: Path) -> None:
+    from unittest.mock import Mock
+
+    files = ContextCraft().analyze_repository(sample_repo)
+    counter = Mock()
+    counter.count.side_effect = len
+    config = CompilationConfig(budget_tokens=1000)
+    formatter = ArtifactFormatter(config, counter)
+    first = formatter.render_budgeted_directory_tree(files, "repo")
+    calls = counter.count.call_count
+    assert "files omitted" in first
+    for file in files:
+        file.selected_fidelity = FidelityLevel.FULL
+
+    assert formatter.render_budgeted_directory_tree(files, "repo") == first
+    assert counter.count.call_count == calls + 1
+
+    for change in ("rank", "path", "root", "budget", "files"):
+        root = "repo"
+        if change == "rank":
+            files[-1].pagerank_score = 100
+        elif change == "path":
+            files[0].rel_path = "renamed.py"
+        elif change == "root":
+            root = "different"
+        elif change == "budget":
+            config.budget_tokens = 3000
+        else:
+            files = files[:-1]
+        expected = ArtifactFormatter(config, counter).render_budgeted_directory_tree(files, root)
+        assert formatter.render_budgeted_directory_tree(files, root) == expected
+
+
+def test_full_tree_refreshes_fidelity_badges(sample_repo: Path) -> None:
+    files = ContextCraft().analyze_repository(sample_repo)
+    formatter = ArtifactFormatter(CompilationConfig(budget_tokens=32000))
+    before = formatter.render_budgeted_directory_tree(files, "repo")
+    files[0].selected_fidelity = FidelityLevel.FULL
+    after = formatter.render_budgeted_directory_tree(files, "repo")
+
+    assert after != before
+    assert after == formatter.render_directory_tree(files, "repo")

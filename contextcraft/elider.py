@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import IntEnum
+from functools import lru_cache
 from typing import ClassVar, Protocol
 
 import tiktoken
@@ -50,8 +51,15 @@ class TokenCounter:
             raise
         except Exception:
             self._encoder = None
+        self._cached_count = lru_cache(maxsize=256)(self._count_uncached)
 
     def count(self, text: str) -> int:
+        # Bound both entry count and retained text size; large artifacts bypass caching.
+        if len(text) <= 16_384:
+            return self._cached_count(text)
+        return self._count_uncached(text)
+
+    def _count_uncached(self, text: str) -> int:
         if not text:
             return 0
         if self._encoder is not None:

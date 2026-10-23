@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import heapq
+from bisect import bisect_right
 from dataclasses import dataclass
 
 from contextcraft.elider import FidelityLevel
@@ -163,6 +164,33 @@ class TokenBudgetOptimizer:
         for _ in range(25):
             best_gain = 1e-06
             best_swap: tuple[int, FidelityLevel, int, FidelityLevel, int] | None = None
+            upgrades: list[tuple[int, int, FidelityLevel, float]] = []
+            for up_idx, up_file in enumerate(files):
+                current = up_file.selected_fidelity
+                current_cost = self._effective_tier_cost(up_file, current)
+                current_value = self.tier_utility(up_file, current)
+                for target in self._ORDERED_TIERS:
+                    if target > current:
+                        upgrades.append(
+                            (
+                                self._effective_tier_cost(up_file, target) - current_cost,
+                                up_idx,
+                                target,
+                                self.tier_utility(up_file, target) - current_value,
+                            )
+                        )
+            upgrades.sort()
+            costs = [upgrade[0] for upgrade in upgrades]
+            best: list[tuple[float, int, FidelityLevel, int]] = []
+            prefixes: list[tuple[tuple[float, int, FidelityLevel, int], ...]] = []
+            for cost, up_idx, target, gain in upgrades:
+                # Two distinct files suffice to exclude the file being downgraded.
+                candidate = (-gain, up_idx, target, cost)
+                existing = next((item for item in best if item[1] == up_idx), None)
+                if existing is None or candidate < existing:
+                    best = sorted([item for item in best if item[1] != up_idx] + [candidate])[:2]
+                prefixes.append(tuple(best))
+
             for down_idx, down_file in enumerate(files):
                 current = down_file.selected_fidelity
                 current_cost = self._effective_tier_cost(down_file, current)
@@ -175,26 +203,17 @@ class TokenBudgetOptimizer:
                         continue
                     loss = current_value - self.tier_utility(down_file, down_level)
                     available = net_budget - used_tokens + freed
-                    for up_idx, up_file in enumerate(files):
+                    position = bisect_right(costs, available) - 1
+                    if position < 0:
+                        continue
+                    for negative_gain, up_idx, target, cost in prefixes[position]:
                         if up_idx == down_idx:
                             continue
-                        up_current = up_file.selected_fidelity
-                        for target in self._ORDERED_TIERS:
-                            if target <= up_current:
-                                continue
-                            cost = self._effective_tier_cost(
-                                up_file, target
-                            ) - self._effective_tier_cost(up_file, up_current)
-                            if cost > available:
-                                continue
-                            gain = (
-                                self.tier_utility(up_file, target)
-                                - self.tier_utility(up_file, up_current)
-                                - loss
-                            )
-                            if gain > best_gain:
-                                best_gain = gain
-                                best_swap = down_idx, down_level, up_idx, target, cost - freed
+                        gain = -negative_gain - loss
+                        if gain > best_gain:
+                            best_gain = gain
+                            best_swap = down_idx, down_level, up_idx, target, cost - freed
+                        break
             if best_swap is None:
                 break
             down_idx, down_level, up_idx, target, delta_tokens = best_swap

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextcraft.ast import ByteRange, Import, ParsedAst, Symbol
-from contextcraft.core import ContextCraft
+from contextcraft.core import AnalyzedRepository, ContextCraft
 from contextcraft.elider import Elider, FidelityLevel, RenderedTier, TokenCounter
 from contextcraft.languages.builtin import default_registry
 from contextcraft.languages.registry import LanguageRegistry
@@ -25,6 +25,7 @@ __version__ = get_version()
 
 __all__ = [
     "ASTParseError",
+    "AnalyzedRepository",
     "ByteRange",
     "CompilationConfig",
     "CompilationError",

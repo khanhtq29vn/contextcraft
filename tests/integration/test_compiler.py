@@ -201,3 +201,102 @@ def test_oversized_file_is_tree_only_when_no_complete_tier_fits(tmp_path: Path) 
     assert file.selected_fidelity == FidelityLevel.TREE
     assert all(file.tiers[level].tokens > 350 for level in FidelityLevel if level)
     assert file.parsed.source == source.encode()
+
+
+@pytest.mark.parametrize("fmt", ["markdown", "xml", "json"])
+@pytest.mark.parametrize("budget", [30, 450, 5000])
+def test_reusable_analysis_matches_fresh_compilation(
+    sample_repo: Path, fmt: str, budget: int
+) -> None:
+    from contextcraft import AnalyzedRepository
+
+    compiler = ContextCraft(focus_query="authentication", focus_files=["README.md"])
+    snapshot = compiler.analyze(sample_repo)
+    assert isinstance(snapshot, AnalyzedRepository)
+    expected = compiler.compile(sample_repo, budget_tokens=budget, output_format=fmt)
+    with (
+        patch("contextcraft.core.RepositoryScanner.scan", side_effect=AssertionError("rescanned")),
+        patch("contextcraft.core.parse", side_effect=AssertionError("reparsed")),
+        patch(
+            "contextcraft.core.DependencyGraphScorer.score_files",
+            side_effect=AssertionError("reranked"),
+        ),
+        patch("contextcraft.core.Elider.render", side_effect=AssertionError("rebuilt tiers")),
+        patch(
+            "contextcraft.core.SecretSanitizer.sanitize_detailed",
+            side_effect=AssertionError("resanitized"),
+        ),
+    ):
+        actual = snapshot.render(budget_tokens=budget, output_format=fmt)
+
+    assert actual.content == expected.content
+    assert actual.stats.model_dump(exclude={"execution_time_ms"}) == expected.stats.model_dump(
+        exclude={"execution_time_ms"}
+    )
+    assert snapshot.root_path == sample_repo.resolve()
+    assert all(file.selected_fidelity == FidelityLevel.TREE for file in snapshot.files)
+
+
+def test_reusable_analysis_isolates_allocations_config_and_disk_changes(tmp_path: Path) -> None:
+    source = "def operation():\n    return 42\n"
+    path = tmp_path / "main.py"
+    path.write_text(source)
+    compiler = ContextCraft(budget_tokens=5000)
+    snapshot = compiler.analyze(tmp_path)
+    first = snapshot.render()
+    compiler.config.budget_tokens = 1
+    compiler.config.output_format = OutputFormat.JSON
+    path.write_text("def changed(): return 0\n")
+    (tmp_path / "new.py").write_text("def added(): return 0\n")
+    small = snapshot.render(budget_tokens=1)
+    again = snapshot.render()
+
+    assert first.files[0].selected_fidelity == FidelityLevel.FULL
+    assert small.files[0].selected_fidelity == FidelityLevel.TREE
+    assert first.content == again.content
+    assert again.output_format == OutputFormat.MARKDOWN
+    assert again.stats.budget_tokens == 5000
+    assert len(again.files) == 1
+    assert again.files[0].parsed.source == source.encode()
+    assert all(file.selected_fidelity == FidelityLevel.TREE for file in snapshot.files)
+    assert first.files[0] is not again.files[0]
+    assert first.files[0].tiers is not again.files[0].tiers
+    assert first.files[0].redacted_secrets is not again.files[0].redacted_secrets
+    assert "changed" in compiler.analyze(tmp_path).files[0].parsed.source.decode()
+
+
+def test_reusable_analysis_handles_empty_repos_and_invalid_render_options(tmp_path: Path) -> None:
+    snapshot = ContextCraft().analyze(tmp_path)
+    assert snapshot.render().files == []
+    with pytest.raises(InvalidBudgetError):
+        snapshot.render(budget_tokens=0)
+    with pytest.raises(ValueError):
+        snapshot.render(output_format="invalid")
+    with pytest.raises(InvalidBudgetError, match="XML"):
+        snapshot.render(budget_tokens=1, output_format="xml")
+
+
+def test_analysis_overrides_filters_and_redaction_without_mutating_config(tmp_path: Path) -> None:
+    secret = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    (tmp_path / "keys.js").write_text(f'const token = "{secret}";')
+    (tmp_path / "other.py").write_text("def other(): return 0\n")
+    compiler = ContextCraft()
+
+    snapshot = compiler.analyze(
+        tmp_path,
+        include_patterns=["*.js"],
+        redact_secrets=False,
+        focus_query="token",
+        focus_files=["keys.js"],
+    )
+    result = snapshot.render()
+
+    assert [file.rel_path for file in result.files] == ["keys.js"]
+    assert secret in result.content
+    assert result.stats.secrets_redacted == 0
+    assert result.stats.ignored_files_skipped == 1
+    assert compiler.config.include_patterns == []
+    assert compiler.config.redact_secrets
+    assert compiler.config.focus_query is None
+    assert compiler.config.focus_files == []
+    assert secret not in compiler.analyze(tmp_path).render().content

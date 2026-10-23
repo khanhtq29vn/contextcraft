@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from contextcraft.ast import ParsedAst
@@ -15,6 +16,65 @@ from contextcraft.models import CompilationConfig, CompilationResult, FileAnalys
 from contextcraft.optimizer import TokenBudgetOptimizer
 from contextcraft.sanitizer import SecretSanitizer
 from contextcraft.scanner import RepositoryScanner, ScanOutcome
+
+
+class AnalyzedRepository:
+    """A sanitized, ranked snapshot created by ContextCraft.analyze().
+
+    Rendering copies allocation state. ASTs and rendered tiers are shared and
+    should be treated as read-only. Disk changes require a new analysis.
+    """
+
+    def __init__(
+        self,
+        outcome: ScanOutcome,
+        files: list[FileAnalysis],
+        config: CompilationConfig,
+        counter: TokenCounter,
+    ) -> None:
+        self.root_path = outcome.root_path
+        self.files = tuple(files)
+        self._config = config.model_copy(deep=True)
+        self._counter = counter
+        self._total_files_discovered = outcome.total_files_discovered
+        self._binary_files_skipped = outcome.binary_files_skipped
+        self._ignored_files_skipped = outcome.ignored_files_skipped
+
+    def render(
+        self,
+        *,
+        budget_tokens: int | str | None = None,
+        output_format: OutputFormat | str | None = None,
+    ) -> CompilationResult:
+        """Allocate and format this snapshot without scanning, parsing, or ranking.
+
+        Defaults come from the analysis configuration. Execution time covers only
+        this render; earlier results and the snapshot's allocation are unchanged.
+        """
+        start = time.perf_counter()
+        config = self._config.model_copy(deep=True)
+        if budget_tokens is not None:
+            config.budget_tokens = CompilationConfig.parse_budget(budget_tokens)
+        if output_format is not None:
+            config.output_format = OutputFormat(output_format.lower())
+        files = [
+            replace(file, tiers=dict(file.tiers), redacted_secrets=list(file.redacted_secrets))
+            for file in self.files
+        ]
+        formatter = ArtifactFormatter(config, self._counter)
+        tree = formatter.render_budgeted_directory_tree(files, self.root_path.name)
+        overhead = TokenBudgetOptimizer.BASE_DOCUMENT_OVERHEAD_TOKENS + self._counter.count(tree)
+        TokenBudgetOptimizer(config).optimize(files, tree_overhead_tokens=overhead)
+        result = formatter.format_result(
+            root_path=self.root_path,
+            files=files,
+            total_files_discovered=self._total_files_discovered,
+            binary_files_skipped=self._binary_files_skipped,
+            ignored_files_skipped=self._ignored_files_skipped,
+            execution_time_ms=0.0,
+        )
+        result.stats.execution_time_ms = (time.perf_counter() - start) * 1000
+        return result
 
 
 class ContextCraft:
@@ -85,19 +145,7 @@ class ContextCraft:
             exclude_patterns=exclude_patterns,
             redact_secrets=redact_secrets,
         )
-        outcome, files, counter = self._analyze(repo_path, config)
-        formatter = ArtifactFormatter(config, counter)
-        tree = formatter.render_budgeted_directory_tree(files, outcome.root_path.name)
-        overhead = TokenBudgetOptimizer.BASE_DOCUMENT_OVERHEAD_TOKENS + counter.count(tree)
-        TokenBudgetOptimizer(config).optimize(files, tree_overhead_tokens=overhead)
-        result = formatter.format_result(
-            root_path=outcome.root_path,
-            files=files,
-            total_files_discovered=outcome.total_files_discovered,
-            binary_files_skipped=outcome.binary_files_skipped,
-            ignored_files_skipped=outcome.ignored_files_skipped,
-            execution_time_ms=0.0,
-        )
+        result = self._analyze(repo_path, config).render()
         result.stats.execution_time_ms = (time.perf_counter() - start) * 1000
         return result
 
@@ -112,14 +160,37 @@ class ContextCraft:
 
         No budget allocation is performed; selected fidelities remain TREE.
         """
-        config = self._effective_config(focus_query=focus_query, focus_files=focus_files)
-        return self._analyze(repo_path, config)[1]
+        return list(self.analyze(repo_path, focus_query=focus_query, focus_files=focus_files).files)
+
+    def analyze(
+        self,
+        repo_path: str | Path,
+        *,
+        focus_query: str | None = None,
+        focus_files: list[str] | None = None,
+        include_patterns: list[str] | None = None,
+        exclude_patterns: list[str] | None = None,
+        redact_secrets: bool | None = None,
+    ) -> AnalyzedRepository:
+        """Scan, sanitize, parse, and rank once for repeated render() calls.
+
+        The snapshot retains this call's configuration, source, tiers, and ranks,
+        not live filesystem contents. Only budget and format vary during rendering.
+        """
+        config = self._effective_config(
+            focus_query=focus_query,
+            focus_files=focus_files,
+            include_patterns=include_patterns,
+            exclude_patterns=exclude_patterns,
+            redact_secrets=redact_secrets,
+        )
+        return self._analyze(repo_path, config)
 
     def _analyze(
         self,
         repo_path: str | Path,
         config: CompilationConfig,
-    ) -> tuple[ScanOutcome, list[FileAnalysis], TokenCounter]:
+    ) -> AnalyzedRepository:
         outcome = RepositoryScanner(self.registry, config).scan(repo_path)
         counter = TokenCounter(config.tokenizer_encoding)
         elider = Elider(counter)
@@ -154,7 +225,7 @@ class ContextCraft:
                 )
             )
         DependencyGraphScorer(config).score_files(files)
-        return outcome, files, counter
+        return AnalyzedRepository(outcome, files, config, counter)
 
     def _effective_config(
         self,

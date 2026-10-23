@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
+import pathspec
 import pytest
 
 from contextcraft.languages.base import LanguageSpec
@@ -158,3 +160,24 @@ def test_scanner_rejects_missing_or_file_roots(tmp_path: Path) -> None:
     for path in (tmp_path / "missing", tmp_path / "file"):
         with pytest.raises(RepositoryNotFoundError):
             scanner.scan(path)
+
+
+def test_scanner_reuses_identical_rules_and_reloads_them_on_next_scan(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("*.log\n")
+    for index in range(20):
+        directory = tmp_path / str(index)
+        directory.mkdir()
+        (directory / "keep.txt").write_text("source")
+        (directory / "skip.log").write_text("ignored")
+    scanner = RepositoryScanner(LanguageRegistry())
+    with patch.object(
+        pathspec.PathSpec, "from_lines", wraps=pathspec.PathSpec.from_lines
+    ) as compile_spec:
+        first = scanner.scan(tmp_path)
+
+    assert len(first.files) == 20
+    assert compile_spec.call_count == 2  # Include filter and one shared ignore spec.
+    (tmp_path / ".gitignore").write_text("*.txt\n")
+    second = scanner.scan(tmp_path)
+    assert len(second.files) == 20
+    assert all(file.rel_path.endswith("skip.log") for file in second.files)
