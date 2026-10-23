@@ -19,7 +19,7 @@
 
 Existing repository packers (`repomix`, `gitingest`, `code2prompt`) blindly concatenate every file verbatim. On real-world repositories, this blows past LLM context budgets, buries critical architecture inside thousands of lines of boilerplate (_Lost-in-the-Middle_ degradation), and wastes API tokens.
 
-**`ContextCraft` is the AST-aware "MarkItDown for Codebases."** Instead of naive concatenation or arbitrary character truncation, `ContextCraft` parses your codebase with **Tree-sitter**, ranks every file's architectural importance via **Personalized PageRank** on the cross-file dependency graph, and solves a **Multiple-Choice Knapsack Problem (MCKP)** across 4 AST fidelity tiers (`FULL`, `SKEL`, `SIGS`, `TREE`) to pack maximum architectural signal into your exact token budget $B$.
+**`ContextCraft` is the AST-aware "MarkItDown for Codebases"**. Instead of naive concatenation or arbitrary character truncation, `ContextCraft` parses your codebase with **Tree-sitter**, ranks every file's architectural importance via **Personalized PageRank** on the cross-file dependency graph, and solves a **Multiple-Choice Knapsack Problem (MCKP)** across 4 AST fidelity tiers (`FULL`, `SKEL`, `SIGS`, `TREE`) to pack maximum architectural signal into your exact token budget $B$.
 
 ---
 
