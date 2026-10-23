@@ -1,12 +1,6 @@
 name: Publish to PyPI
 
 on:
-  workflow_call:
-    inputs:
-      tag:
-        description: Release tag to publish
-        required: true
-        type: string
   workflow_dispatch:
     inputs:
       tag:

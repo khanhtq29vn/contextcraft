@@ -31,12 +31,20 @@ jobs:
           manifest-file: .release-please-manifest.json
 
   publish:
-    name: Publish new release to PyPI
+    name: Trigger PyPI publishing
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
-    uses: ./.github/workflows/publish-pypi.yml
-    with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
+    runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: read
-      id-token: write
+    steps:
+      - name: Dispatch publishing workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          gh workflow run publish-pypi.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            --field "tag=$RELEASE_TAG"

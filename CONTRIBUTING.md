@@ -110,6 +110,6 @@ The manifest starts at the existing `v0.1.0` release. The configuration's `boots
 
 ### PyPI publishing
 
-Merging a Release Please PR triggers a workflow run on `main`. When Release Please creates the tag and GitHub release, it calls **Publish to PyPI** with that tag. The publishing workflow builds the tagged source and publishes through the existing `pypi` environment and Trusted Publishing setup. Any environment approval rules still apply.
+Merging a Release Please PR triggers a workflow run on `main`. When Release Please creates the tag and GitHub release, it dispatches **Publish to PyPI** as a separate workflow run on `main`, passing that tag. Keeping publishing in its own top-level workflow ensures the attestation identity matches the configured PyPI Trusted Publisher (`publish-pypi.yml`). The publishing workflow builds the tagged source and publishes through the existing `pypi` environment with attestations enabled. Any environment approval rules still apply. Release Please reports dispatch success; check the separate **Publish to PyPI** run for the publishing result.
 
 To publish an existing release manually, run **Actions → Publish to PyPI → Run workflow** from `main` and enter its tag, such as `v0.2.0`. Creating tags or releases manually does not trigger publishing; use this manual workflow instead.
