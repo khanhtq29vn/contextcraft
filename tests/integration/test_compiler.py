@@ -237,10 +237,13 @@ def test_reusable_analysis_matches_fresh_compilation(
     assert all(file.selected_fidelity == FidelityLevel.TREE for file in snapshot.files)
 
 
-def test_reusable_analysis_isolates_allocations_config_and_disk_changes(tmp_path: Path) -> None:
-    source = "def operation():\n    return 42\n"
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_reusable_analysis_isolates_allocations_config_and_disk_changes(
+    tmp_path: Path, newline: str
+) -> None:
+    source = f"def operation():{newline}    return 42{newline}"
     path = tmp_path / "main.py"
-    path.write_text(source)
+    path.write_bytes(source.encode())
     compiler = ContextCraft(budget_tokens=5000)
     snapshot = compiler.analyze(tmp_path)
     first = snapshot.render()
