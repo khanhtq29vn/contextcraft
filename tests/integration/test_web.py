@@ -5,9 +5,9 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from web.app import _clone_and_compile_github_repo, app
 
 from contextcraft import ContextCraft, ContextCraftError
+from web.app import _clone_and_compile_github_repo, app
 
 client = TestClient(app)
 

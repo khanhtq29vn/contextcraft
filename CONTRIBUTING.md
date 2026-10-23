@@ -28,10 +28,10 @@ Before submitting a Pull Request, please ensure all three verification checks pa
 
 ```bash
 # 1. Lint & import sorting check
-uv run ruff check src tests web benchmarks
+uv run ruff check contextcraft tests web benchmarks
 
 # 2. Strict static type checking
-uv run mypy src/contextcraft
+uv run mypy contextcraft
 
 # 3. Full test suite with branch coverage
 uv run pytest --cov=contextcraft --cov-report=term-missing
@@ -75,14 +75,14 @@ uv run --locked sphinx-build -W --keep-going -b dirhtml docs docs/_build/html
 
 ## 3. High-Impact Ways to Contribute
 
-1. **Adding or Enhancing Language Support (`src/contextcraft/languages/`):**
+1. **Adding or Enhancing Language Support (`contextcraft/languages/`):**
    - Follow the JavaScript package layout: `language.py`, `extraction.py`, `skeleton.py`, and `signatures.py`.
    - Declare parser IDs, extensions, filenames, and ignore patterns in `LanguageSpec`, then register the language in `languages/builtin.py`.
    - Implement extraction and the `SkeletonBuilder` / `SignaturesBuilder` classes. Register them as `skeleton_builder` and `signatures_builder` on the language class.
    - Test symbol ranges, syntax-safe summaries, missing grammars, and token-budget compliance.
-2. **Improving Cross-File Import Resolution (`src/contextcraft/graph.py`):**
+2. **Improving Cross-File Import Resolution (`contextcraft/graph.py`):**
    - Enhance `_resolve_imported_files` for Rust (`use crate::...`), Go, C/C++ `#include`, or Java package imports.
-3. **Expanding Secret Detection Rules (`src/contextcraft/sanitizer.py`):**
+3. **Expanding Secret Detection Rules (`contextcraft/sanitizer.py`):**
    - Add zero-false-positive token regexes to `SecretSanitizer._TOKEN_PATTERNS`.
 
 ---
@@ -104,7 +104,7 @@ uv run --locked sphinx-build -W --keep-going -b dirhtml docs docs/_build/html
 - `feat:` produces minor releases.
 - `BREAKING CHANGE:` footers or `!` produce minor releases while the version is `0.x`, and major releases after `1.0`.
 
-The release PR updates `pyproject.toml`, `src/contextcraft/__init__.py`, `uv.lock`, `CHANGELOG.md`, and `.release-please-manifest.json`. Review it, wait for CI to pass, then merge it. The next workflow run creates a `v`-prefixed tag and a GitHub release. Use a conventional squash-merge title for normal PRs, and preserve the generated title and body when merging release PRs.
+The release PR updates `pyproject.toml`, `contextcraft/__init__.py`, `uv.lock`, `CHANGELOG.md`, and `.release-please-manifest.json`. Review it, wait for CI to pass, then merge it. The next workflow run creates a `v`-prefixed tag and a GitHub release. Use a conventional squash-merge title for normal PRs, and preserve the generated title and body when merging release PRs.
 
 The manifest starts at the existing `v0.1.0` release. The configuration's `bootstrap-sha` limits the first release's commit history to changes after that tag; Release Please ignores it after the first release PR is merged.
 

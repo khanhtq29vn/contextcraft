@@ -86,12 +86,12 @@ Repository = "https://github.com/khanhtq29vn/contextcraft"
 Issues = "https://github.com/khanhtq29vn/contextcraft/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/contextcraft"]
+packages = ["contextcraft"]
 
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-src = ["src", "tests", "web", "benchmarks"]
+src = [".", "tests", "web", "benchmarks"]
 
 [tool.ruff.lint]
 select = [
@@ -121,19 +121,19 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
 no_implicit_optional = true
-mypy_path = "src"
+mypy_path = "."
 packages = ["contextcraft"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "-ra -q --strict-markers --import-mode=importlib"
 testpaths = ["tests"]
-pythonpath = ["src", "."]
+pythonpath = ["."]
 
 [tool.coverage.run]
-source = ["src/contextcraft"]
+source = ["contextcraft"]
 branch = true
-omit = ["src/contextcraft/__main__.py"]
+omit = ["contextcraft/__main__.py"]
 
 [tool.coverage.report]
 show_missing = true

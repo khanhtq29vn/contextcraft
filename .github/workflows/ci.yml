@@ -40,10 +40,10 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Run Ruff linter
-        run: uv run ruff check src tests web benchmarks
+        run: uv run ruff check contextcraft tests web benchmarks
 
       - name: Run Mypy strict type checker
-        run: uv run mypy src/contextcraft
+        run: uv run mypy contextcraft
 
       - name: Run Pytest suite with coverage
         run: uv run pytest --cov=contextcraft --cov-report=term-missing

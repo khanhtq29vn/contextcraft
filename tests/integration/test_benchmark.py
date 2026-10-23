@@ -8,7 +8,6 @@ from benchmarks.run_benchmark import (
     evaluate_naive_truncation,
     run_benchmark_suite,
 )
-
 from contextcraft import ContextCraft, FidelityLevel, RenderedTier, TokenCounter
 
 

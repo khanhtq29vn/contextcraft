@@ -138,8 +138,8 @@ The benchmark uses whole-file truncation and fidelity-based retention estimates.
 uv sync --locked --all-extras --dev
 
 # Run lint, strict type checking, and test coverage
-uv run ruff check src tests web benchmarks
-uv run mypy src/contextcraft
+uv run ruff check contextcraft tests web benchmarks
+uv run mypy contextcraft
 uv run pytest --cov=contextcraft --cov-report=term-missing
 ```
 
