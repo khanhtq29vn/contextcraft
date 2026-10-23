@@ -10,6 +10,7 @@ from contextcraft import CompilationConfig, ContextCraft, FidelityLevel
 from contextcraft.ast import ParsedAst
 from contextcraft.elider import Elider, TokenCounter
 from contextcraft.formatter import ArtifactFormatter
+from contextcraft.languages.builtin import PythonLanguage
 from contextcraft.languages.javascript.language import JavaScriptLanguage
 from contextcraft.models import FileAnalysis
 
@@ -75,3 +76,53 @@ def test_minimal_json_is_valid_with_a_character_counter() -> None:
 
     assert result.stats.compressed_tokens == 1
     assert json.loads(result.content) == 0
+
+
+def test_budgeted_tree_preserves_small_trees(sample_repo: Path) -> None:
+    files = ContextCraft().analyze_repository(sample_repo)
+    formatter = ArtifactFormatter(CompilationConfig(budget_tokens=32000))
+
+    assert formatter.render_budgeted_directory_tree(files, "repo") == (
+        formatter.render_directory_tree(files, "repo")
+    )
+
+
+def test_budgeted_tree_uses_injected_counter_and_handles_tiny_budgets() -> None:
+    class Counter:
+        def count(self, text: str) -> int:
+            return len(text)
+
+    formatter = ArtifactFormatter(CompilationConfig(budget_tokens=10), Counter())
+
+    assert formatter.render_budgeted_directory_tree([], "very-long-root-name") == ""
+
+
+def test_overflow_trimming_sacrifices_bodies_before_api_breadth(tmp_path: Path) -> None:
+    class Counter:
+        def count(self, text: str) -> int:
+            return len(text)
+
+    (tmp_path / "critical.py").write_text('def critical():\n    return "' + "x" * 5000 + '"\n')
+    (tmp_path / "api.py").write_text(
+        "def first():\n    return 1\ndef second():\n    return 2\ndef third():\n    return 3\n"
+    )
+    files = ContextCraft().analyze_repository(tmp_path)
+    counter = Counter()
+    for file in files:
+        file.tiers = Elider(counter).render(file.parsed, PythonLanguage)
+        file.selected_fidelity = FidelityLevel.FULL
+        file.pagerank_score = 0.9 if file.rel_path == "critical.py" else 0.1
+    formatter = ArtifactFormatter(CompilationConfig(budget_tokens=1200), counter)
+
+    result = formatter.format_result(
+        root_path=tmp_path,
+        files=files,
+        total_files_discovered=2,
+        binary_files_skipped=0,
+        ignored_files_skipped=0,
+        execution_time_ms=0.0,
+    )
+
+    assert counter.count(result.content) <= 1200
+    assert all(file.selected_fidelity > FidelityLevel.TREE for file in files)
+    assert result.stats.preserved_signatures_pct == 100

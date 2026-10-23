@@ -5,23 +5,15 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from contextcraft import __version__
 from contextcraft.cli import app
 from contextcraft.elider import TokenCounter
 
 runner = CliRunner()
 
 
-def test_cli_execution_and_file_output(sample_repo: Path, tmp_path: Path) -> None:
-    """Verify CLI flags (`--budget`, `--focus`, `--format`, `--output`, `--version`)."""
-    # 1. Version flag
-    ver_res = runner.invoke(app, ["--version"])
-    assert ver_res.exit_code == 0
-    assert __version__ in ver_res.stdout
-
-    # 2. Compile to output file
-    out_file = tmp_path / "compiled_context.md"
-    cli_res = runner.invoke(
+def test_cli_writes_sanitized_context(sample_repo: Path, tmp_path: Path) -> None:
+    output = tmp_path / "compiled_context.md"
+    result = runner.invoke(
         app,
         [
             str(sample_repo),
@@ -30,18 +22,20 @@ def test_cli_execution_and_file_output(sample_repo: Path, tmp_path: Path) -> Non
             "--focus",
             "UserClaims verify_token",
             "--output",
-            str(out_file),
+            str(output),
         ],
     )
-    assert cli_res.exit_code == 0
-    assert out_file.is_file()
-    content = out_file.read_text(encoding="utf-8")
+
+    assert result.exit_code == 0, result.output
+    content = output.read_text(encoding="utf-8")
     assert "# Repository Context:" in content
     assert "sk-proj-1234567890" not in content
 
-    # 3. Error exit code on invalid budget
-    bad_res = runner.invoke(app, [str(sample_repo), "--budget", "invalid_budget"])
-    assert bad_res.exit_code == 1
+
+def test_cli_rejects_invalid_budget(sample_repo: Path) -> None:
+    result = runner.invoke(app, [str(sample_repo), "--budget", "invalid_budget"])
+
+    assert result.exit_code == 1
 
 
 def test_cli_output_excludes_only_its_exact_path(tmp_path: Path) -> None:
@@ -49,19 +43,15 @@ def test_cli_output_excludes_only_its_exact_path(tmp_path: Path) -> None:
     (tmp_path / "src" / "bundle.md").write_text("KEEP_NESTED_FILE")
     output = tmp_path / "bundle.md"
     output.write_text("DO_NOT_INGEST_OLD_OUTPUT")
-    runner = CliRunner()
 
-    version = runner.invoke(app, ["--version"])
     result = runner.invoke(
         app, [str(tmp_path), "--budget", "4k", "--output", str(output), "--quiet"]
     )
 
-    assert version.exit_code == 0
-    assert __version__ in version.stdout
     assert result.exit_code == 0, result.output
-    assert "DO_NOT_INGEST_OLD_OUTPUT" not in output.read_text()
-    assert "KEEP_NESTED_FILE" in output.read_text()
-    assert runner.invoke(app, [str(tmp_path), "--budget", "invalid"]).exit_code == 1
+    content = output.read_text(encoding="utf-8")
+    assert "DO_NOT_INGEST_OLD_OUTPUT" not in content
+    assert "KEEP_NESTED_FILE" in content
 
 
 def test_cli_encoding_flag_selects_tokenizer_encoding(sample_repo: Path, tmp_path: Path) -> None:

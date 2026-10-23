@@ -205,8 +205,8 @@ def _render_telemetry_summary(
         f"FULL: {stats.fidelity_counts.get('FULL', 0)} | SKEL: {stats.fidelity_counts.get('SKEL', 0)} | SIGS: {stats.fidelity_counts.get('SIGS', 0)} | TREE: {stats.fidelity_counts.get('TREE', 0)}",
     )
     metrics_table.add_row(
-        "Signature Coverage",
-        f"{stats.preserved_signatures_pct:.1f}% ({stats.total_symbols_extracted} AST symbols)",
+        "Public API Coverage",
+        f"{stats.preserved_signatures_pct:.1f}% ({stats.preserved_public_signatures}/{stats.total_public_signatures} signatures)",
     )
     if stats.secrets_redacted > 0:
         metrics_table.add_row(

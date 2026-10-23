@@ -75,10 +75,11 @@ class ContextCraft:
             redact_secrets=redact_secrets,
         )
         outcome, files, counter = self._analyze(repo_path, config)
-        tree = ArtifactFormatter.render_directory_tree(files, outcome.root_path.name)
+        formatter = ArtifactFormatter(config, counter)
+        tree = formatter.render_budgeted_directory_tree(files, outcome.root_path.name)
         overhead = TokenBudgetOptimizer.BASE_DOCUMENT_OVERHEAD_TOKENS + counter.count(tree)
         TokenBudgetOptimizer(config).optimize(files, tree_overhead_tokens=overhead)
-        result = ArtifactFormatter(config, counter).format_result(
+        result = formatter.format_result(
             root_path=outcome.root_path,
             files=files,
             total_files_discovered=outcome.total_files_discovered,

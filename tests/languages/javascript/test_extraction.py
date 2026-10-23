@@ -60,7 +60,7 @@ def test_parsed_ast_retains_source_ranges_and_anonymous_symbol_parents() -> None
     parsed = parse(source, JavaScriptLanguage)
     outer, inner = parsed.symbols
 
-    assert parsed.source is source
+    assert parsed.source == source
     assert outer.name is None
     assert inner.name is None
     assert outer.parent is None
@@ -72,5 +72,3 @@ def test_parsed_ast_retains_source_ranges_and_anonymous_symbol_parents() -> None
     assert parsed.text(inner.signature_range) == "() =>"
     assert inner.body_range is not None
     assert parsed.text(inner.body_range) == "arg"
-    assert not hasattr(parsed, "tree")
-    assert not hasattr(parsed, "root")

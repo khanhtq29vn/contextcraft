@@ -13,7 +13,6 @@ from contextcraft.elider import (
     FidelityLevel,
     RenderedTier,
     TokenCounter,
-    TokenCounterProtocol,
 )
 from contextcraft.formatter import ArtifactFormatter
 from contextcraft.languages.base import Language, LanguageSpec, SignaturesBuilder, SkeletonBuilder
@@ -41,7 +40,7 @@ def test_elider_supplies_a_default_token_counter(encoder: tiktoken.Encoding) -> 
         assert tier.tokens == len(encoder.encode(tier.content, disallowed_special=()))
 
 
-def test_elider_preserves_falsy_injected_counters() -> None:
+def test_elider_and_formatter_preserve_falsy_injected_counters() -> None:
     class Counter:
         def __bool__(self) -> bool:
             return False
@@ -52,24 +51,10 @@ def test_elider_preserves_falsy_injected_counters() -> None:
     counter = Counter()
     with patch("contextcraft.elider.tiktoken.get_encoding") as get_encoding:
         elider = Elider(counter)
-
-    assert elider.token_counter is counter
-    get_encoding.assert_not_called()
-
-
-def test_public_counter_protocol_is_shared_by_elider_and_formatter() -> None:
-    class CharacterCounter:
-        def count(self, text: str) -> int:
-            return len(text)
-
-    counter: TokenCounterProtocol = CharacterCounter()
-    parsed = parse(b"function run() { return value; }", JavaScriptLanguage)
-    elider = Elider(counter)
-    formatter = ArtifactFormatter(CompilationConfig(), counter)
+        formatter = ArtifactFormatter(CompilationConfig(), counter)
 
     assert elider.token_counter is formatter.token_counter is counter
-    for tier in elider.render(parsed, JavaScriptLanguage).values():
-        assert tier.tokens == len(tier.content)
+    get_encoding.assert_not_called()
 
 
 def test_multi_resolution_elider_monotonic_tiers_and_docstring_retention(

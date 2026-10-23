@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from contextcraft.ast import ParsedAst, Symbol
 from contextcraft.languages.base import SignaturesBuilder as BaseSignaturesBuilder
+from contextcraft.languages.javascript.imports import ImportTrimmer
 
 
 class SignaturesBuilder(BaseSignaturesBuilder):
+    import_trimmer = ImportTrimmer
+
     def build(self, parsed: ParsedAst) -> str:
         if parsed.has_errors:
             return parsed.source.decode("utf-8")
 
-        lines = [parsed.text(item.declaration_range) for item in parsed.imports]
+        lines = self._import_lines(parsed)
         classes: list[Symbol] = []
 
         for symbol in parsed.symbols:

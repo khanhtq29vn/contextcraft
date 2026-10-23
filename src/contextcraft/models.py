@@ -127,6 +127,8 @@ class CompilationStats(BaseModel):
     token_savings_pct: float = Field()
     fidelity_counts: dict[str, int] = Field(default_factory=dict)
     total_symbols_extracted: int = Field(default=0, ge=0)
+    total_public_signatures: int = Field(default=0, ge=0)
+    preserved_public_signatures: int = Field(default=0, ge=0)
     preserved_signatures_pct: float = Field(default=100.0, ge=0.0, le=100.0)
     secrets_redacted: int = Field(default=0, ge=0)
     execution_time_ms: float = Field(ge=0.0)

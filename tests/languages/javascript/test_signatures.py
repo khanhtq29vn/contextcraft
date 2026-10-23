@@ -8,6 +8,7 @@ from contextcraft.languages.javascript.language import JavaScriptLanguage
 
 def test_signatures_keep_imports_public_classes_and_functions() -> None:
     source = b"""import {service} from "./service.js";
+import Base from "./base.js";
 /** Public client. */
 export class Client extends Base {
     /** Fetch a record. */
@@ -29,7 +30,7 @@ register(value => service(value));
 
     assert (
         signatures
-        == """import {service} from "./service.js";
+        == """import Base from "./base.js";
 const Client = class Client extends Base {
     fetch(id) {}
 };

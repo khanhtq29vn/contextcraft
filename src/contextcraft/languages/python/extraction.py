@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 class PythonRules(LanguageExtractor):
     IMPORT_NODE_TYPES: ClassVar[frozenset[str]] = frozenset(
-        {"import_statement", "import_from_statement"}
+        {"import_statement", "import_from_statement", "future_import_statement"}
     )
     NODE_TYPES: ClassVar[dict[str, str]] = {
         "class_definition": "class",

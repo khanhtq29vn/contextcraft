@@ -17,7 +17,11 @@
    - $l = 1$ (`SIGS`): Public signatures and imports only ($u(1) = 0.45$).
    - $l = 0$ (`TREE`): Directory tree entry only ($u(0) = 0.00$).
 
-5. **Multiple-Choice Knapsack Problem (MCKP) Solver:**
-   Selects exactly one fidelity tier $l_i \in \{0, 1, 2, 3\}$ per file to maximize total architectural utility under strict token budget $B$:
+5. **Budget Allocation (MCKP Heuristic):**
+   Selects one fidelity tier $l_i \in \{0, 1, 2, 3\}$ per file using marginal utility per token and local refinement. Let $r_i(l)$ be the number of named public code declarations whose signatures are actually retained at tier $l$. The objective rewards API breadth as well as implementation fidelity:
 
-$$\max_{\{l_i\}} \sum_{i=1}^{N} w_i \cdot u(l_i) \quad \text{s.t.} \quad \text{Overhead}_{\text{tree}} + \sum_{i=1}^{N} C_{\text{eff}}(i, l_i) \le B$$
+$$\max_{\{l_i\}} \sum_{i=1}^{N} w_i \cdot \bigl(r_i(l_i) + u(l_i)\bigr) \quad \text{s.t.} \quad \text{Overhead}_{\text{tree}} + \sum_{i=1}^{N} C_{\text{eff}}(i, l_i) \le B$$
+
+Individual signature additions compete with whole-file upgrades by the same marginal utility per token. A selected method includes its enclosing type, and partial signature output is syntax-checked and marked explicitly. Signature builders share import trimming: known named bindings used only by omitted implementations are removed, while imports needed by declarations, annotations, defaults, decorators, or module-level re-exports remain. Side-effect loads, wildcard imports, and imports whose bindings cannot be determined safely are preserved. Original ASTs and full-source tiers remain unchanged.
+
+The directory tree uses at most 10% of the token budget. If the full tree does not fit, a compact list prioritizes highly ranked paths and reports omitted files. After formatting, the emitted artifact is counted again; if necessary, tiers are downgraded by the least utility lost per estimated token saved until the output fits.

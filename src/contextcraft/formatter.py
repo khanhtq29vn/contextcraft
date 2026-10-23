@@ -16,11 +16,14 @@ from contextcraft.models import (
     InvalidBudgetError,
     OutputFormat,
 )
+from contextcraft.optimizer import TokenBudgetOptimizer
 
 
 class ArtifactFormatter:
     def __init__(
-        self, config: CompilationConfig, token_counter: TokenCounterProtocol | None = None
+        self,
+        config: CompilationConfig,
+        token_counter: TokenCounterProtocol | None = None,
     ) -> None:
         self.config = config
         self.token_counter = (
@@ -38,32 +41,52 @@ class ArtifactFormatter:
         execution_time_ms: float,
     ) -> CompilationResult:
         root = Path(root_path).resolve()
+        optimizer = TokenBudgetOptimizer(self.config)
         while True:
-            tree = self.render_directory_tree(files, root.name)
+            tree = self.render_budgeted_directory_tree(files, root.name)
             content = self._render(root.name, files, tree)
-            if self.token_counter.count(content) <= self.config.budget_tokens:
+            overflow_tokens = self.token_counter.count(content) - self.config.budget_tokens
+            if overflow_tokens <= 0:
                 break
             active = [file for file in files if file.selected_fidelity > FidelityLevel.TREE]
             if not active:
                 content = self._minimal(root.name, files)
                 break
-            lowest = min(active, key=lambda file: (file.pagerank_score, file.rel_path))
-            lowest.selected_fidelity = FidelityLevel(int(lowest.selected_fidelity) - 1)
+            downgrades: list[tuple[float, str, FidelityLevel, FileAnalysis]] = []
+            for file in active:
+                current_value = optimizer.tier_utility(file, file.selected_fidelity)
+                for level in FidelityLevel:
+                    if level >= file.selected_fidelity:
+                        continue
+                    saved_tokens = file.selected_tokens - file.tiers[level].tokens
+                    if level == FidelityLevel.TREE:
+                        saved_tokens += TokenBudgetOptimizer.FILE_WRAPPER_OVERHEAD_TOKENS
+                    if saved_tokens <= 0:
+                        continue
+                    loss = current_value - optimizer.tier_utility(file, level)
+                    downgrades.append(
+                        (
+                            loss / min(saved_tokens, overflow_tokens),
+                            file.rel_path,
+                            level,
+                            file,
+                        )
+                    )
+            _, _, level, file = min(downgrades, key=lambda item: item[:3])
+            file.selected_fidelity = level
 
         count = self.token_counter.count(content)
         raw = sum(file.raw_tokens for file in files)
         counts = dict.fromkeys((level.badge for level in FidelityLevel), 0)
         counts.update(Counter(file.selected_fidelity.badge for file in files))
         symbols = sum(len(file.symbols) for file in files)
-        preserved = 0
-        for file in files:
-            selected = " ".join(file.selected_content.split())
-            if file.selected_fidelity != FidelityLevel.TREE:
-                preserved += sum(
-                    bool(signature) and signature in selected
-                    for symbol in file.symbols
-                    if (signature := " ".join(file.parsed.text(symbol.signature_range).split()))
-                )
+        public_signatures = sum(symbol.is_public for file in files for symbol in file.symbols)
+        preserved = sum(
+            symbol.is_public
+            for file in files
+            if file.selected_fidelity >= FidelityLevel.SIGNATURES
+            for symbol in file.symbols
+        )
         stats = CompilationStats(
             total_files_discovered=total_files_discovered,
             binary_files_skipped=binary_files_skipped,
@@ -78,7 +101,11 @@ class ArtifactFormatter:
             token_savings_pct=round((1 - count / raw) * 100, 2) if raw else 0.0,
             fidelity_counts=counts,
             total_symbols_extracted=symbols,
-            preserved_signatures_pct=preserved / symbols * 100 if symbols else 100.0,
+            total_public_signatures=public_signatures,
+            preserved_public_signatures=preserved,
+            preserved_signatures_pct=preserved / public_signatures * 100
+            if public_signatures
+            else 100.0,
             secrets_redacted=sum(file.redacted_secrets_count for file in files),
             execution_time_ms=execution_time_ms,
         )
@@ -168,7 +195,7 @@ class ArtifactFormatter:
             path = file.rel_path.replace("\n", "\\n").replace("`", "\\`")
             lines += [
                 "",
-                f"### `{path}` [{file.selected_fidelity.badge}] (PageRank: {file.pagerank_score:.2%})",
+                f"### `{path}` [{file.selected_fidelity.badge}]",
                 fence + file.language,
                 file.selected_content.rstrip("\n"),
                 fence,
@@ -232,6 +259,34 @@ class ArtifactFormatter:
         return "`" * max(
             3, max((len(match) + 1 for match in re.findall(r"`+", content)), default=0)
         )
+
+    def render_budgeted_directory_tree(
+        self, files: list[FileAnalysis], root_name: str = "."
+    ) -> str:
+        # Navigation must not crowd source code out of small context windows.
+        max_tokens = self.config.budget_tokens // 10
+        tree = self.render_directory_tree(files, root_name)
+        if self.token_counter.count(tree) <= max_tokens:
+            return tree
+
+        header = json.dumps(root_name, ensure_ascii=False) + "/\n"
+        lines: list[str] = []
+
+        def compact_tree(paths: list[str]) -> str:
+            omitted = len(files) - len(paths)
+            suffix = f"... {omitted} files omitted\n" if omitted else ""
+            return header + "".join(paths) + suffix
+
+        tree = compact_tree(lines)
+        if self.token_counter.count(tree) > max_tokens:
+            return ""
+        for file in sorted(files, key=lambda item: (-item.pagerank_score, item.rel_path)):
+            line = "- " + json.dumps(file.rel_path, ensure_ascii=False) + "\n"
+            candidate = compact_tree([*lines, line])
+            if self.token_counter.count(candidate) <= max_tokens:
+                lines.append(line)
+                tree = candidate
+        return tree
 
     @staticmethod
     def render_directory_tree(files: list[FileAnalysis], root_name: str = ".") -> str:

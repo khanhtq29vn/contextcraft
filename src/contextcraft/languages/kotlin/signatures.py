@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from contextcraft.languages.kotlin.imports import ImportTrimmer
 from contextcraft.languages.structural import BlockSignaturesBuilder
 
 
 class SignaturesBuilder(BlockSignaturesBuilder):
-    pass
+    import_trimmer = ImportTrimmer

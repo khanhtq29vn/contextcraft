@@ -225,7 +225,7 @@ class StructuralSignaturesBuilder(SignaturesBuilder):
                 )
                 + "\n"
             )
-        lines = list(dict.fromkeys(parsed.text(item.declaration_range) for item in parsed.imports))
+        lines = self._import_lines(parsed)
         for symbol in parsed.symbols:
             if not symbol.is_public and symbol.name not in {"__init__", "__call__", "main"}:
                 continue
@@ -244,8 +244,13 @@ class StructuralSignaturesBuilder(SignaturesBuilder):
                 continue
             signature = parsed.text(symbol.signature_range)
             if self.style == "python":
+                has_children = any(
+                    child.parent is symbol
+                    and (child.is_public or child.name in {"__init__", "__call__", "main"})
+                    for child in parsed.symbols
+                )
                 signature = signature.rstrip().rstrip(":") + (
-                    ":" if symbol.kind == "class" else ": ..."
+                    ":" if symbol.kind == "class" and has_children else ": ..."
                 )
             elif symbol.kind in {"class", "struct", "enum", "trait", "interface"}:
                 signature += " { ... }"
@@ -268,7 +273,7 @@ class BlockSignaturesBuilder(SignaturesBuilder):
         if parsed.has_errors:
             return parsed.source.decode("utf-8")
 
-        lines = list(dict.fromkeys(parsed.text(item.declaration_range) for item in parsed.imports))
+        lines = self._import_lines(parsed)
         containers: list[Symbol] = []
         for symbol in parsed.symbols:
             if symbol.name is None or not symbol.is_public:

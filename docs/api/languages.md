@@ -55,7 +55,7 @@ The following types live in `contextcraft.languages.base`.
 
 ```{eval-rst}
 .. autoclass:: contextcraft.languages.base.Language
-   :members: parse, build_scopes
+   :members: parse, build_scopes, build_selected
    :undoc-members:
 ```
 
@@ -103,13 +103,34 @@ return a source-only AST with `has_errors=True`.
 
 ```{eval-rst}
 .. autoclass:: contextcraft.languages.base.SignaturesBuilder
-   :members: build
+   :members: build, build_selected
    :undoc-members:
 ```
 
 Both builders receive a `LanguageSpec` at construction. Implement
 `build(parsed)` to return text; token counting and tier fallback are handled by
 `Elider`. Builders should use the supplied AST rather than reparsing the source.
+
+`SignaturesBuilder.build_selected(parsed, symbols)` renders a subset of declarations.
+Its default implementation includes their ancestors and calls `build()` with a
+filtered symbol list, preserving the original AST. Override it if a custom
+builder needs additional context.
+
+`Language.build_selected()` uses the signature builder, falling back to a
+source-preserving skeleton when needed.
+
+Each signature builder selects an `import_trimmer` class. Language-specific
+classification lives in that language's `imports` module; the shared base only
+handles reference matching and conservative fallback. TypeScript and TSX reuse
+the JavaScript classifier for their common import syntax.
+
+Built-in signature builders trim known unused named imports using their grammar.
+This covers Python, JavaScript/TypeScript/TSX, Rust, Go, Java, C#, Kotlin, Scala,
+Swift, and PHP where the declaration identifies a binding. Trimming preserves
+whole grouped declarations if any binding is needed. Runtime loads such as
+Ruby `require`, R `library`, shell `source`, C/C++ headers, namespace imports,
+wildcards, and other unclassifiable forms remain intact. Imports and source
+ranges on the original AST are never changed.
 
 ## Scope data
 

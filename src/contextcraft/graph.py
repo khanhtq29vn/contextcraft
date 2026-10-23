@@ -11,10 +11,14 @@ from typing import ClassVar
 import networkx as nx
 
 from contextcraft.models import CompilationConfig, FileAnalysis
+from contextcraft.retention import code_symbols
 
 
 class DependencyGraphScorer:
-    _QUERY_TOKEN_RE: ClassVar[re.Pattern[str]] = re.compile("[A-Za-z0-9_]{2,}")
+    _QUERY_TOKEN_RE: ClassVar[re.Pattern[str]] = re.compile(r"\w{2,}")
+    _BM25_K1 = 1.2
+    _BM25_B = 0.75
+    _FIELD_WEIGHTS = (5.0, 4.0, 2.5, 1.0)
     _ARCHITECTURAL_FILENAME_PRIORS: ClassVar[dict[str, float]] = {
         "readme.md": 1.8,
         "pyproject.toml": 1.6,
@@ -73,9 +77,10 @@ class DependencyGraphScorer:
         for file_obj in files:
             rel_path = file_obj.rel_path
             graph.add_node(rel_path)
-            for ident in file_obj.defined_identifiers:
-                symbol_definers[ident].add(rel_path)
-            for sym in file_obj.symbols:
+            for binding in file_obj.parsed.scope_graph.bindings:
+                if binding.scope.kind == "module":
+                    symbol_definers[binding.name].add(rel_path)
+            for sym in code_symbols(file_obj.parsed, public_only=False):
                 if sym.name is not None:
                     symbol_definers[sym.name].add(rel_path)
                 if sym.qualified_name:
@@ -87,15 +92,23 @@ class DependencyGraphScorer:
         for src_file in files:
             src_path = src_file.rel_path
             imported_targets = self._resolve_imported_files(src_file, module_index)
+            # Unfocused tests must not gain centrality just by importing production code.
+            include_reverse_edges = self._test_penalty(src_path) == 1.0
             for dst_path in imported_targets:
                 if dst_path != src_path:
                     graph.add_edge(src_path, dst_path, weight=6.0, ident="__import__")
-                    graph.add_edge(dst_path, src_path, weight=0.9, ident="__imported_by__")
-            ref_counts = Counter(src_file.referenced_identifiers)
+                    if include_reverse_edges:
+                        graph.add_edge(dst_path, src_path, weight=0.9, ident="__imported_by__")
+            ref_counts = Counter(
+                reference.name
+                for reference in src_file.parsed.scope_graph.references
+                if reference.scope.resolve(reference.name) is None
+            )
             for ident, freq in ref_counts.items():
                 definers = symbol_definers.get(ident)
                 if not definers:
                     continue
+                definers = definers & imported_targets or definers
                 ident_weight = self._compute_identifier_weight(
                     ident=ident,
                     definer_count=len(definers),
@@ -107,9 +120,10 @@ class DependencyGraphScorer:
                     if dst_path == src_path:
                         continue
                     graph.add_edge(src_path, dst_path, weight=edge_weight, ident=ident)
-                    graph.add_edge(
-                        dst_path, src_path, weight=edge_weight * 0.15, ident=f"caller:{ident}"
-                    )
+                    if include_reverse_edges:
+                        graph.add_edge(
+                            dst_path, src_path, weight=edge_weight * 0.15, ident=f"caller:{ident}"
+                        )
         return graph
 
     @classmethod
@@ -136,56 +150,64 @@ class DependencyGraphScorer:
             weight *= 6.0
         return weight
 
+    def _bm25_scores(self, files: list[FileAnalysis], query_terms: list[str]) -> dict[str, float]:
+        """BM25F normalizes fields before saturating their combined term frequency."""
+        scores = dict.fromkeys((file.rel_path for file in files), 0.0)
+        if not files or not query_terms:
+            return scores
+
+        documents: list[list[Counter[str]]] = []
+        doc_freq: Counter[str] = Counter()
+        for file in files:
+            symbols = code_symbols(file.parsed, public_only=False)
+            fields = (
+                file.rel_path,
+                "\n".join(file.parsed.text(symbol.signature_range) for symbol in symbols),
+                "\n".join(
+                    file.parsed.text(symbol.docstring_range)
+                    for symbol in symbols
+                    if symbol.docstring_range is not None
+                ),
+                file.parsed.source.decode("utf-8"),
+            )
+            tokens = [Counter(self._tokenize(field)) for field in fields]
+            documents.append(tokens)
+            doc_freq.update(set().union(*tokens))
+
+        lengths = [[sum(field.values()) for field in document] for document in documents]
+        averages = [sum(column) / len(files) for column in zip(*lengths, strict=True)]
+        for file, document, field_lengths in zip(files, documents, lengths, strict=True):
+            for term in dict.fromkeys(query_terms):
+                frequency = doc_freq[term]
+                if not frequency:
+                    continue
+                idf = math.log1p((len(files) - frequency + 0.5) / (frequency + 0.5))
+                normalized_tf = 0.0
+                for field, length, average, weight in zip(
+                    document, field_lengths, averages, self._FIELD_WEIGHTS, strict=True
+                ):
+                    if field[term]:
+                        normalization = 1 - self._BM25_B + self._BM25_B * length / average
+                        normalized_tf += weight * field[term] / normalization
+                scores[file.rel_path] += (
+                    idf * normalized_tf * (self._BM25_K1 + 1) / (normalized_tf + self._BM25_K1)
+                )
+        return scores
+
     def _compute_personalization_vector(
         self, files: list[FileAnalysis], graph: nx.MultiDiGraph[str], query_terms: list[str]
     ) -> dict[str, float]:
         base_scores: dict[str, float] = {}
-        doc_freq: Counter[str] = Counter()
-        file_term_bags: dict[str, tuple[set[str], set[str], set[str], set[str]]] = {}
-        for file_obj in files:
-            path_tokens = set(self._tokenize_query(file_obj.rel_path))
-            sym_tokens: set[str] = set()
-            doc_tokens: set[str] = set()
-            for sym in file_obj.symbols:
-                sym_tokens.update(self._tokenize_query(sym.name))
-                sym_tokens.update(self._tokenize_query(file_obj.parsed.text(sym.signature_range)))
-                if sym.docstring_range is not None:
-                    doc_tokens.update(
-                        self._tokenize_query(file_obj.parsed.text(sym.docstring_range))
-                    )
-            body_tokens = {ident.lower() for ident in file_obj.referenced_identifiers}
-            file_term_bags[file_obj.rel_path] = (path_tokens, sym_tokens, doc_tokens, body_tokens)
-            all_file_terms = path_tokens | sym_tokens | doc_tokens | body_tokens
-            for q_term in query_terms:
-                if any(q_term == t or q_term in t for t in all_file_terms):
-                    doc_freq[q_term] += 1
-        num_files = len(files)
+        lexical_scores = self._bm25_scores(files, query_terms)
         for file_obj in files:
             rel_path = file_obj.rel_path
-            filename_lower = PurePosixPath(rel_path).name.lower()
-            score = self._ARCHITECTURAL_FILENAME_PRIORS.get(filename_lower, 1.0)
-            if rel_path.startswith(("tests/", "test_", "benchmarks/")) or "/test_" in rel_path:
-                score *= 0.65
-            if self._matches_focus_files(rel_path, self.config.focus_files):
+            filename = PurePosixPath(rel_path).name
+            score = self._ARCHITECTURAL_FILENAME_PRIORS.get(filename.lower(), 1.0)
+            score += 3.5 * lexical_scores[rel_path]
+            explicitly_focused = self._matches_focus_files(rel_path, self.config.focus_files)
+            score *= self._test_penalty(rel_path)
+            if explicitly_focused:
                 score += 20.0
-            if query_terms:
-                path_toks, sym_toks, doc_toks, body_toks = file_term_bags[rel_path]
-                query_match_score = 0.0
-                for q_term in query_terms:
-                    df = doc_freq.get(q_term, 0)
-                    idf = math.log(1.0 + (num_files - df + 0.5) / (df + 0.5))
-                    term_weight = 0.0
-                    if any(q_term == t or q_term in t for t in path_toks):
-                        term_weight += 5.0
-                    if any(q_term == t or q_term in t for t in sym_toks):
-                        term_weight += 4.0
-                    if any(q_term == t or q_term in t for t in doc_toks):
-                        term_weight += 2.5
-                    if any(q_term == t or q_term in t for t in body_toks):
-                        term_weight += 1.0
-                    query_match_score += term_weight * max(idf, 0.25)
-                if query_match_score > 0.0:
-                    score += query_match_score * 3.5
             base_scores[rel_path] = max(score, 0.05)
         diffused_scores = dict(base_scores)
         if query_terms or self.config.focus_files:
@@ -193,13 +215,44 @@ class DependencyGraphScorer:
             for node, node_score in base_scores.items():
                 if node_score > median_score * 1.5:
                     excess = node_score - median_score
+                    neighbors: dict[str, float] = defaultdict(float)
                     for _, neighbor, edge_data in graph.out_edges(node, data=True):
                         if neighbor != node:
-                            edge_w = min(float(edge_data.get("weight", 1.0)), 10.0)
-                            diffused_scores[neighbor] = diffused_scores.get(
-                                neighbor, 1.0
-                            ) + 0.3 * excess * (edge_w / 10.0)
+                            neighbors[neighbor] += max(float(edge_data.get("weight", 1.0)), 0.0)
+                    total_weight = sum(neighbors.values())
+                    if total_weight:
+                        for neighbor, weight in neighbors.items():
+                            diffused_scores[neighbor] += 0.3 * excess * weight / total_weight
         return diffused_scores
+
+    def _test_penalty(self, rel_path: str) -> float:
+        if self._matches_focus_files(rel_path, self.config.focus_files) or (
+            set(self._tokenize_query(self.config.focus_query))
+            & {
+                "test",
+                "tests",
+                "testing",
+                "spec",
+                "specs",
+                "benchmark",
+                "benchmarks",
+                "benchmarking",
+            }
+        ):
+            return 1.0
+        path = PurePosixPath(rel_path)
+        if {part.lower() for part in path.parts[:-1]} & {
+            "test",
+            "tests",
+            "__tests__",
+            "spec",
+            "specs",
+            "__specs__",
+            "benchmarks",
+            "benches",
+        } or re.search(r"(^(?:test|spec)[_.]|[._](?:test|spec)\.|Tests?\.)", path.name):
+            return 0.02
+        return 1.0
 
     @staticmethod
     def _run_pagerank(
@@ -251,19 +304,21 @@ class DependencyGraphScorer:
         return ranks
 
     @classmethod
+    def _tokenize(cls, text: str) -> list[str]:
+        tokens: list[str] = []
+        for word in cls._QUERY_TOKEN_RE.findall(text):
+            split = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", word)
+            split = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", split)
+            tokens.extend(
+                token
+                for token in dict.fromkeys([word.lower(), *split.lower().split("_")])
+                if len(token) >= 2
+            )
+        return tokens
+
+    @classmethod
     def _tokenize_query(cls, query: str | None) -> list[str]:
-        if not query or not query.strip():
-            return []
-        raw_tokens = cls._QUERY_TOKEN_RE.findall(query)
-        expanded: list[str] = []
-        seen: set[str] = set()
-        for tok in raw_tokens:
-            sub_parts = re.sub("([a-z0-9])([A-Z])", "\\1_\\2", tok).lower().split("_")
-            for candidate in [tok.lower(), *sub_parts]:
-                if len(candidate) >= 2 and candidate not in seen:
-                    seen.add(candidate)
-                    expanded.append(candidate)
-        return expanded
+        return list(dict.fromkeys(cls._tokenize(query or "")))
 
     @staticmethod
     def _matches_focus_files(rel_path: str, focus_patterns: list[str]) -> bool:

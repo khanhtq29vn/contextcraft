@@ -412,7 +412,7 @@
           ${badgeHtml("SIGS")} <span>${fc.SIGS || 0}</span>
           ${badgeHtml("TREE")} <span>${fc.TREE || 0}</span>
         `;
-        document.getElementById("statSignatures").textContent = `Signature coverage: ${s.preserved_signatures_pct}% (${s.total_symbols_extracted} AST symbols)`;
+        document.getElementById("statSignatures").textContent = `Public API coverage: ${s.preserved_signatures_pct.toFixed(1)}% (${s.preserved_public_signatures}/${s.total_public_signatures} signatures)`;
         document.getElementById("statLatency").textContent = `${s.execution_time_ms} ms`;
         document.getElementById("statSecrets").textContent = `${s.secrets_redacted} secrets scrubbed`;
 

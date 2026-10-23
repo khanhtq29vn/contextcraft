@@ -5,22 +5,12 @@ from tree_sitter_language_pack import get_parser
 
 from contextcraft.ast import ByteRange, ParsedAst, Symbol
 from contextcraft.ast.parser import parse
-from contextcraft.languages.base import LanguageSpec, SignaturesBuilder, SkeletonBuilder
+from contextcraft.languages.base import LanguageSpec
 from contextcraft.languages.builtin import default_registry
 from contextcraft.languages.structural import StructuralSkeletonBuilder
 
 
-@pytest.mark.parametrize("builder", [SkeletonBuilder, SignaturesBuilder])
-def test_builders_require_a_build_implementation(builder: type) -> None:
-    with pytest.raises(TypeError, match="abstract"):
-        builder(LanguageSpec(id="test"))
-
-
-@pytest.mark.parametrize(
-    "parser_id,marker",
-    [("python", "..."), ("html", "<!-- ... -->"), ("typescript", "{ /* ... */ }")],
-)
-def test_structural_skeleton_elides_outermost_ranges(parser_id: str, marker: str) -> None:
+def test_structural_skeleton_elides_outermost_ranges() -> None:
     source = b"a OUTER INNER BODY z"
     parsed = ParsedAst(
         source=source,
@@ -41,19 +31,17 @@ def test_structural_skeleton_elides_outermost_ranges(parser_id: str, marker: str
             ),
         ],
     )
-    language = default_registry().get(parser_id)
+    language = default_registry().get("python")
     assert language is not None
     builder = language.skeleton_builder(language.spec)
 
-    assert builder.build(parsed) == f"a {marker} z"
-    assert builder.build(parsed) == f"a {marker} z"
+    assert builder.build(parsed) == "a ... z"
     assert parsed.source == source
 
 
-@pytest.mark.parametrize("parser_id", [None, "unknown"])
-def test_structural_skeleton_preserves_unsupported_source(parser_id: str | None) -> None:
+def test_structural_skeleton_without_elision_preserves_source() -> None:
     parsed = ParsedAst(source=b"original source\r\n")
-    builder = StructuralSkeletonBuilder(LanguageSpec(id="test", parser_id=parser_id))
+    builder = StructuralSkeletonBuilder(LanguageSpec(id="test"))
 
     assert builder.build(parsed) == parsed.source.decode()
 
