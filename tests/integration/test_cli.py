@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+from click.utils import strip_ansi
 from typer.testing import CliRunner
 
 from contextcraft.cli import app
@@ -58,8 +59,9 @@ def test_cli_encoding_flag_selects_tokenizer_encoding(sample_repo: Path, tmp_pat
     """Verify `--encoding` / `-enc` is advertised and forwarded to token accounting."""
     help_res = runner.invoke(app, ["--help"])
     assert help_res.exit_code == 0
-    assert "--encoding" in help_res.stdout
-    assert "-enc" in help_res.stdout
+    help_text = strip_ansi(help_res.stdout)
+    assert "--encoding" in help_text
+    assert "-enc" in help_text
 
     observed: list[str] = []
     original_init = TokenCounter.__init__
