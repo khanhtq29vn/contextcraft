@@ -25,7 +25,7 @@ contextcraft --help
 `--output` is set; telemetry goes to stderr unless `--quiet` is set.
 
 | Option               | Description                                                                         | Default       |
-| :--------------------| :-----------------------------------------------------------------------------------| :-------------|
+| :------------------- | :---------------------------------------------------------------------------------- | :------------ |
 | `--budget`, `-b`     | Token budget, as an integer or shorthand such as `16k`                              | `32k`         |
 | `--encoding`, `-enc` | Tiktoken encoding name used for token accounting (e.g. `cl100k_base`, `o200k_base`) | `cl100k_base` |
 | `--focus`, `-f`      | Query or symbol keywords to bias ranking                                            | None          |
