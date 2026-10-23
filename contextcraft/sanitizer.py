@@ -55,29 +55,22 @@ class SecretSanitizer:
         r"""^(?P<export>export\s+)?(?P<key>[A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|PWD|CREDENTIAL|DATABASE_URL|REDIS_URL)[A-Z0-9_]*)\s*=\s*(?P<quote>["']?)(?P<value>[^\r\n]*?)(?P=quote)(?=[ \t]*(?:#|\r?$))""",
         re.IGNORECASE,
     )
-    _SAFE_VALUE_PREFIXES: ClassVar[tuple[str, ...]] = (
-        "<REDACTED_SECRET:",
-        "your-",
-        "your_",
-        "example",
-        "changeme",
-        "placeholder",
-        "dummy",
-        "test-",
-        "test_",
-        "fake-",
-        "fake_",
-        "mock-",
-        "mock_",
-        "todo",
-        "none",
-        "null",
-        "true",
-        "false",
-        "http://localhost",
-        "https://localhost",
-        "${",
-        "$",
+    _SAFE_VALUES: ClassVar[frozenset[str]] = frozenset(
+        {
+            "example",
+            "changeme",
+            "placeholder",
+            "dummy",
+            "todo",
+            "none",
+            "null",
+            "true",
+            "false",
+            "your-api-key",
+            "your-api-key-here",
+            "your_api_key",
+            "your_api_key_here",
+        }
     )
 
     @classmethod
@@ -204,11 +197,13 @@ class SecretSanitizer:
         if len(stripped) < 8:
             return True
         lower = stripped.lower()
-        if any(lower.startswith(p.lower()) for p in cls._SAFE_VALUE_PREFIXES):
+        if lower in cls._SAFE_VALUES:
             return True
-        if "<redacted_secret:" in lower:
+        if any(lower == f"<redacted_secret:{kind.value.lower()}>" for kind in SecretKind):
             return True
-        return bool(" " in stripped or stripped.startswith(("/", "./", "../")))
+        return bool(
+            re.fullmatch(r"\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})", stripped)
+        )
 
     @staticmethod
     def _is_dotenv_file(file_path: str) -> bool:

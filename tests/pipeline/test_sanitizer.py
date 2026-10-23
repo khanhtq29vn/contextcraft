@@ -106,6 +106,68 @@ def test_dotenv_quoted_hashes_and_trailing_comments() -> None:
     assert len(result.redacted_secrets) == 2
 
 
+@pytest.mark.parametrize("file_path", ["config.py", "config.json", ".env.production"])
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "pineapple violet meadow",
+        "noneR7nY9u2K5v8X4q6Z",
+        "test_R7nY9u2K5v8X4q6Z",
+        "exampleR7nY9u2K5v8X4q6Z",
+        "your-R7nY9u2K5v8X4q6Z",
+        "fake_R7nY9u2K5v8X4q6Z",
+        "mock-R7nY9u2K5v8X4q6Z",
+        "$R7nY9u2K5v8X4q6Z!",
+        "http://localhost.evil.invalid/R7nY9u2K5v8X4q6Z",
+        "/R7nY9u2K5v8X4q6Z",
+        "R7nY9u2K5v8X4q6Z<REDACTED_SECRET:GENERIC_SECRET>",
+    ],
+)
+def test_sanitizer_does_not_exempt_passphrases_or_placeholder_prefixes(
+    file_path: str, secret: str
+) -> None:
+    source = (
+        json.dumps({"password": secret})
+        if file_path.endswith(".json")
+        else f"PASSWORD={json.dumps(secret)}\n"
+    )
+
+    result = SecretSanitizer.sanitize_detailed(source, file_path)
+
+    assert secret not in result.sanitized_content
+    assert len(result.redacted_secrets) == 1
+    if file_path.endswith(".json"):
+        assert json.loads(result.sanitized_content)["password"].startswith("<REDACTED_SECRET:")
+    assert SecretSanitizer.sanitize_detailed(result.sanitized_content, file_path) == (
+        result.sanitized_content,
+        [],
+    )
+
+
+@pytest.mark.parametrize("file_path", ["config.py", ".env.production"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "changeme",
+        "placeholder",
+        "your-api-key-here",
+        "your_api_key_here",
+        "$PASSWORD",
+        "${PASSWORD}",
+        "<REDACTED_SECRET:GENERIC_SECRET>",
+    ],
+)
+def test_sanitizer_preserves_exact_placeholders_and_variable_references(
+    file_path: str, value: str
+) -> None:
+    source = f"PASSWORD={json.dumps(value)}\n"
+
+    result = SecretSanitizer.sanitize_detailed(source, file_path)
+
+    assert result.sanitized_content == source
+    assert result.redacted_secrets == []
+
+
 def test_sanitizer_is_idempotent_and_preserves_quoted_code() -> None:
     source = 'const key = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";\n'
     first = SecretSanitizer.sanitize_detailed(source, "key.js")
