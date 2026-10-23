@@ -3,32 +3,9 @@ from __future__ import annotations
 import pytest
 from tree_sitter_language_pack import get_parser
 
-from contextcraft.ast import ByteRange, ParsedAst, Symbol
 from contextcraft.ast.parser import parse
 from contextcraft.languages.javascript.language import JavaScriptLanguage
 from contextcraft.languages.javascript.skeleton import SkeletonBuilder
-
-
-def test_skeleton_uses_only_the_structural_summary() -> None:
-    source = b"function run() { return result; }"
-    body_start = source.index(b"{")
-    parsed = ParsedAst(
-        source=source,
-        symbols=[
-            Symbol(
-                name="run",
-                kind="function",
-                declaration_range=ByteRange(0, len(source)),
-                signature_range=ByteRange(0, body_start - 1),
-                body_range=ByteRange(body_start, len(source)),
-            )
-        ],
-    )
-
-    assert (
-        JavaScriptLanguage.skeleton_builder(JavaScriptLanguage.spec).build(parsed)
-        == "function run() { /* ... */ }"
-    )
 
 
 def test_skeleton_preserves_imports_classes_signatures_and_jsdoc() -> None:

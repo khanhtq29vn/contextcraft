@@ -6,6 +6,12 @@ from contextcraft.languages.base import Language
 
 
 class LanguageRegistry:
+    """Register language metadata and resolve paths to ordered parser candidates.
+
+    Multiple languages may share an extension or filename. Registration order
+    determines parser preference; duplicate IDs and aliases are rejected.
+    """
+
     def __init__(self) -> None:
         self._languages: dict[str, type[Language]] = {}
         self._extensions: dict[str, list[type[Language]]] = {}
@@ -47,6 +53,7 @@ class LanguageRegistry:
         return self._languages.get(language_id) or self._aliases.get(language_id)
 
     def detect_candidates(self, path: str) -> list[type[Language]]:
+        """Prefer exact filenames over case-insensitive extensions; return a new list."""
         file_path = Path(path)
         filename = file_path.name
 

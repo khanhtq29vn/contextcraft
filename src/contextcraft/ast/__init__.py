@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ByteRange:
+    """Half-open byte offsets into ParsedAst.source, not character indices."""
+
     start_byte: int
     end_byte: int
 
@@ -49,6 +51,12 @@ class EmbeddedRegion:
 
 @dataclass
 class ParsedAst:
+    """Source-backed declarations and scopes extracted from one UTF-8 document.
+
+    All ranges refer to these source bytes, after any secret sanitization.
+    Embedded regions have their own ParsedAst with region-relative offsets.
+    """
+
     source: bytes
     symbols: list[Symbol] = field(default_factory=list)
     imports: list[Import] = field(default_factory=list)

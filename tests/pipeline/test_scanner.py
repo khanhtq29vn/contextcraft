@@ -120,16 +120,27 @@ def test_scanner_skips_binary_oversized_empty_and_symlinked_files(tmp_path: Path
 
 
 def test_scanner_filters_includes_excludes_and_preserves_bytes(tmp_path: Path) -> None:
-    for name in ("main.js", "skip.js", "notes.md"):
-        (tmp_path / name).write_bytes('const café = "你好";\r\n'.encode())
-    config = CompilationConfig(include_patterns=["*.js"], exclude_patterns=["skip.js"])
+    source = 'const café = "你好";\r\n'.encode()
+    for name in (
+        "src/main.js",
+        "src/skip.js",
+        "src/nested/main.js",
+        "src/nested/skip.js",
+        "main.js",
+        "notes.md",
+    ):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(source)
+    config = CompilationConfig(include_patterns=["src/**/*.js"], exclude_patterns=["**/skip.js"])
 
     outcome = RepositoryScanner(default_registry(), config).scan(tmp_path)
 
-    assert len(outcome.files) == 1
-    assert outcome.files[0].source == 'const café = "你好";\r\n'.encode()
-    assert outcome.files[0].size_bytes == len(outcome.files[0].source)
-    assert outcome.files[0].candidates == (JavaScriptLanguage,)
+    assert [file.rel_path for file in outcome.files] == ["src/main.js", "src/nested/main.js"]
+    for file in outcome.files:
+        assert file.source == source
+        assert file.size_bytes == len(source)
+        assert file.candidates == (JavaScriptLanguage,)
 
 
 def test_scanner_does_not_load_ignores_from_pruned_directories(tmp_path: Path) -> None:
@@ -147,18 +158,3 @@ def test_scanner_rejects_missing_or_file_roots(tmp_path: Path) -> None:
     for path in (tmp_path / "missing", tmp_path / "file"):
         with pytest.raises(RepositoryNotFoundError):
             scanner.scan(path)
-
-
-def test_scanner_include_and_exclude_patterns(sample_repo: Path) -> None:
-    """Verify user `include_patterns` and `exclude_patterns` filter files accurately."""
-    cfg = CompilationConfig(
-        include_patterns=["src/**/*.py"],
-        exclude_patterns=["**/helpers.py"],
-    )
-    outcome = RepositoryScanner(default_registry(), cfg).scan(sample_repo)
-    rel_paths = {f.rel_path for f in outcome.files}
-
-    assert "src/auth/models.py" in rel_paths
-    assert "src/auth/jwt_service.py" in rel_paths
-    assert "src/frontend/client.ts" not in rel_paths
-    assert "src/utils/helpers.py" not in rel_paths

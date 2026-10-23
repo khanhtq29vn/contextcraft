@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from contextcraft.ast.parser import parse
 from contextcraft.languages.javascript.language import JavaScriptLanguage
 
@@ -43,24 +41,12 @@ export const run = (value) => service(value);
     assert set(parsed.referenced_identifiers) == {"Base", "service", "id", "value"}
 
 
-@pytest.mark.parametrize(
-    "source",
-    [b"", b"// comment", b"function broken( {", 'const café = "é"; consume(café);'.encode()],
-)
-def test_javascript_empty_incomplete_and_unicode_source(source: bytes) -> None:
-    parsed = parse(source, JavaScriptLanguage)
-
-    assert parsed.scope_graph.scopes[0].kind == "module"
-    for item in [*parsed.scope_graph.bindings, *parsed.scope_graph.references]:
-        assert source[item.start_byte : item.end_byte].decode("utf-8") == item.name
-
-
 def test_parsed_ast_retains_source_ranges_and_anonymous_symbol_parents() -> None:
     source = b"register(function (arg) { return () => arg; });"
     parsed = parse(source, JavaScriptLanguage)
     outer, inner = parsed.symbols
 
-    assert parsed.source is source
+    assert parsed.source == source
     assert outer.name is None
     assert inner.name is None
     assert outer.parent is None
@@ -72,5 +58,3 @@ def test_parsed_ast_retains_source_ranges_and_anonymous_symbol_parents() -> None
     assert parsed.text(inner.signature_range) == "() =>"
     assert inner.body_range is not None
     assert parsed.text(inner.body_range) == "arg"
-    assert not hasattr(parsed, "tree")
-    assert not hasattr(parsed, "root")

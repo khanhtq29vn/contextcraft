@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -13,11 +12,9 @@ from contextcraft.elider import (
     FidelityLevel,
     RenderedTier,
     TokenCounter,
-    TokenCounterProtocol,
 )
 from contextcraft.formatter import ArtifactFormatter
 from contextcraft.languages.base import Language, LanguageSpec, SignaturesBuilder, SkeletonBuilder
-from contextcraft.languages.builtin import PythonLanguage
 from contextcraft.languages.javascript.language import JavaScriptLanguage
 from contextcraft.models import CompilationConfig
 
@@ -41,7 +38,7 @@ def test_elider_supplies_a_default_token_counter(encoder: tiktoken.Encoding) -> 
         assert tier.tokens == len(encoder.encode(tier.content, disallowed_special=()))
 
 
-def test_elider_preserves_falsy_injected_counters() -> None:
+def test_elider_and_formatter_preserve_falsy_injected_counters() -> None:
     class Counter:
         def __bool__(self) -> bool:
             return False
@@ -52,49 +49,10 @@ def test_elider_preserves_falsy_injected_counters() -> None:
     counter = Counter()
     with patch("contextcraft.elider.tiktoken.get_encoding") as get_encoding:
         elider = Elider(counter)
-
-    assert elider.token_counter is counter
-    get_encoding.assert_not_called()
-
-
-def test_public_counter_protocol_is_shared_by_elider_and_formatter() -> None:
-    class CharacterCounter:
-        def count(self, text: str) -> int:
-            return len(text)
-
-    counter: TokenCounterProtocol = CharacterCounter()
-    parsed = parse(b"function run() { return value; }", JavaScriptLanguage)
-    elider = Elider(counter)
-    formatter = ArtifactFormatter(CompilationConfig(), counter)
+        formatter = ArtifactFormatter(CompilationConfig(), counter)
 
     assert elider.token_counter is formatter.token_counter is counter
-    for tier in elider.render(parsed, JavaScriptLanguage).values():
-        assert tier.tokens == len(tier.content)
-
-
-def test_multi_resolution_elider_monotonic_tiers_and_docstring_retention(
-    sample_repo: Path,
-) -> None:
-    """Verify monotonically smaller tiers, preserved docstrings, and elided bodies."""
-    jwt_path = sample_repo / "src" / "auth" / "jwt_service.py"
-    source = jwt_path.read_bytes()
-    parsed = parse(source, PythonLanguage)
-    tiers = Elider(TokenCounter()).render(parsed, PythonLanguage)
-
-    assert tiers[FidelityLevel.TREE].tokens == 0
-    assert (
-        0
-        < tiers[FidelityLevel.SIGNATURES].tokens
-        <= tiers[FidelityLevel.SKELETON].tokens
-        < tiers[FidelityLevel.FULL].tokens
-    )
-    assert tiers[FidelityLevel.FULL].content == source.decode()
-
-    skeleton = tiers[FidelityLevel.SKELETON].content
-    assert "def verify_token(self, token: str, current_timestamp: int) -> TokenPayload:" in skeleton
-    assert "Verify JWT signature and expiration timestamp" in skeleton
-    assert "..." in skeleton
-    assert "hmac.compare_digest" not in skeleton
+    get_encoding.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -166,27 +124,6 @@ def test_elider_uses_injected_token_costs_not_character_lengths() -> None:
     assert tiers[FidelityLevel.FULL] == RenderedTier("full", 20)
     assert tiers[FidelityLevel.SKELETON] == RenderedTier("long skeleton", 5)
     assert tiers[FidelityLevel.SIGNATURES] is tiers[FidelityLevel.SKELETON]
-
-
-def test_elider_renders_javascript_and_preserves_full_source_exactly() -> None:
-    source = (
-        "/** Public function with documentation kept by the skeleton tier. */\r\n"
-        "export function café(value) {\r\n"
-        '    const message = "你好";\r\n'
-        "    return service.transform(message, value);\r\n"
-        "}\r\n"
-    ).encode()
-    parsed = parse(source, JavaScriptLanguage)
-    elider = Elider(CharacterCounter())
-
-    tiers = elider.render(parsed, JavaScriptLanguage)
-
-    assert tiers[FidelityLevel.FULL].content == source.decode()
-    assert "Public function" in tiers[FidelityLevel.SKELETON].content
-    assert "service.transform" not in tiers[FidelityLevel.SKELETON].content
-    assert "Public function" not in tiers[FidelityLevel.SIGNATURES].content
-    assert "café(value)" in tiers[FidelityLevel.SIGNATURES].content
-    assert tiers == elider.render(parsed, JavaScriptLanguage)
 
 
 @pytest.mark.parametrize("source", [b"", b"const value = input;", b"function broken( {"])

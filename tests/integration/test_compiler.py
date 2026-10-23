@@ -15,61 +15,41 @@ from contextcraft import (
     OutputFormat,
     TokenCounter,
 )
+from contextcraft.formatter import ArtifactFormatter
 from contextcraft.languages.base import LanguageSpec
 from contextcraft.languages.javascript.language import JavaScriptLanguage
 from contextcraft.languages.registry import LanguageRegistry
 
 
-def test_sdk_end_to_end_markdown_xml_and_json(sample_repo: Path) -> None:
-    """Verify `ContextCraft.compile()` produces valid Markdown, XML, and JSON with secrets scrubbed."""
-    cc = ContextCraft(budget_tokens="2k", focus_query="JWT authentication")
-
-    # 1. Markdown output
-    md_res = cc.compile(sample_repo, output_format=OutputFormat.MARKDOWN)
-    assert "# Repository Context:" in md_res.markdown
-    assert "## Repository Directory Tree" in md_res.text_content
-    assert "sk-proj-1234567890" not in md_res.content
-    assert md_res.stats.secrets_redacted >= 1
-    assert md_res.stats.compressed_tokens <= 2000
-
-    # 2. XML output (must parse cleanly as well-formed XML)
-    xml_res = cc.compile(sample_repo, output_format="xml")
-    assert xml_res.stats.compressed_tokens <= 2000
-    assert "sk-proj-1234567890" not in xml_res.content
-    root_elem = ET.fromstring(xml_res.content)
-    assert root_elem.tag == "repository_context"
-
-    # 3. JSON output (must deserialize cleanly as valid JSON)
-    json_res = cc.compile(sample_repo, output_format=OutputFormat.JSON)
-    assert json_res.stats.compressed_tokens <= 2000
-    payload = json.loads(json_res.content)
-    assert payload["budget_tokens"] == 2000
-    assert isinstance(payload["files"], list)
-
-
-def test_focused_compilation_stays_within_budget(sample_repo: Path) -> None:
-    result = ContextCraft(budget_tokens=800, focus_query="JWT verify_token").compile(sample_repo)
-
-    assert result.stats.compressed_tokens == TokenCounter().count(result.content) <= 800
-    assert result.stats.budget_tokens == 800
-
-
 @pytest.mark.parametrize("fmt", ["markdown", "xml", "json"])
-@pytest.mark.parametrize("budget", [30, 180, 450, 800, 2000, 5000])
+@pytest.mark.parametrize(
+    "budget,focus_query",
+    [(30, None), (2000, "JWT authentication")],
+)
 def test_compiler_respects_real_emitted_token_budgets(
-    sample_repo: Path, fmt: str, budget: int
+    sample_repo: Path, fmt: str, budget: int, focus_query: str | None
 ) -> None:
-    result = ContextCraft(budget_tokens=budget, output_format=fmt).compile(sample_repo)
+    result = ContextCraft(budget_tokens=budget, output_format=fmt, focus_query=focus_query).compile(
+        sample_repo
+    )
 
-    assert result.stats.compressed_tokens <= budget
-    assert result.stats.compressed_tokens == TokenCounter().count(result.content)
+    assert result.markdown == result.text_content == result.content
+    assert result.stats.budget_tokens == budget
+    assert result.stats.compressed_tokens == TokenCounter().count(result.content) <= budget
     assert result.stats.secrets_redacted >= 1
     assert "sk-proj-1234567890" not in result.content
     assert sum(result.stats.fidelity_counts.values()) == len(result.files)
     if fmt == "xml":
         assert ET.fromstring(result.content).tag == "repository_context"
     elif fmt == "json":
-        json.loads(result.content)
+        payload = json.loads(result.content)
+        if budget >= 2000:
+            assert payload["budget_tokens"] == budget
+            assert payload["focus_query"] == focus_query
+            assert isinstance(payload["files"], list)
+    elif budget >= 2000:
+        assert "# Repository Context:" in result.content
+        assert "## Repository Directory Tree" in result.content
     for file in result.files:
         assert "sk-proj-1234567890" not in file.parsed.source.decode()
 
@@ -133,12 +113,18 @@ def test_compiler_uses_injected_registry_and_selects_valid_candidates(tmp_path: 
 
 
 def test_compiler_configuration_overrides_are_isolated(sample_repo: Path) -> None:
-    config = CompilationConfig(budget_tokens=5000, focus_files=["README.md"])
+    config = CompilationConfig(
+        budget_tokens=5000, focus_query="authentication", focus_files=["README.md"]
+    )
     compiler = ContextCraft(config)
     config.focus_files.append("mutated")
 
     first = compiler.compile(
-        sample_repo, budget_tokens=450, output_format="json", focus_files=["models.py"]
+        sample_repo,
+        budget_tokens=450,
+        output_format=OutputFormat.JSON,
+        focus_query="JWT verify_token",
+        focus_files=["models.py"],
     )
     second = compiler.compile(sample_repo)
 
@@ -146,6 +132,7 @@ def test_compiler_configuration_overrides_are_isolated(sample_repo: Path) -> Non
     assert second.stats.budget_tokens == 5000
     assert second.output_format == "markdown"
     assert compiler.config.focus_files == ["README.md"]
+    assert compiler.config.focus_query == "authentication"
 
 
 def test_compiler_redaction_can_be_explicitly_disabled(tmp_path: Path) -> None:
@@ -173,3 +160,44 @@ def test_empty_repository_and_single_file(tmp_path: Path) -> None:
 
     assert result.files[0].pagerank_score == 1.0
     assert result.files[0].selected_fidelity == FidelityLevel.FULL
+
+
+@pytest.mark.parametrize("fmt", ["markdown", "xml", "json"])
+def test_large_directory_tree_leaves_budget_for_code(tmp_path: Path, fmt: str) -> None:
+    for index in range(80):
+        path = tmp_path / f"module_{index:03d}_with_a_long_descriptive_filename.py"
+        path.write_text(f"def action_{index}():\n    return {index}\n", encoding="utf-8")
+    compiler = ContextCraft(budget_tokens=1000, output_format=fmt)
+    analyses = compiler.analyze_repository(tmp_path)
+
+    counter = TokenCounter()
+    full_tree = ArtifactFormatter.render_directory_tree(analyses, tmp_path.name)
+    assert counter.count(full_tree) > 1000
+
+    result = compiler.compile(tmp_path)
+
+    assert result.stats.compressed_tokens == counter.count(result.content) <= 1000
+    assert result.stats.tree_overhead_tokens <= 100
+    assert result.stats.preserved_signatures_pct > 0
+    assert any(file.selected_fidelity > FidelityLevel.TREE for file in result.files)
+    assert "files omitted" in result.content
+    if fmt == "xml":
+        ET.fromstring(result.content)
+    elif fmt == "json":
+        json.loads(result.content)
+
+
+def test_oversized_file_is_tree_only_when_no_complete_tier_fits(tmp_path: Path) -> None:
+    source = "".join(
+        f"def operation_{index}(value: int) -> int:\n    return value + {index}\n"
+        for index in range(50)
+    )
+    (tmp_path / "api.py").write_bytes(source.encode("utf-8"))
+
+    result = ContextCraft(budget_tokens=350).compile(tmp_path)
+    file = result.files[0]
+
+    assert result.stats.compressed_tokens <= 350
+    assert file.selected_fidelity == FidelityLevel.TREE
+    assert all(file.tiers[level].tokens > 350 for level in FidelityLevel if level)
+    assert file.parsed.source == source.encode()

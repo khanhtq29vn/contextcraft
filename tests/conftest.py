@@ -148,7 +148,7 @@ def sample_repo(tmp_path: Path) -> Path:
         "    if payload.expires_at < timestamp:\n"
         '        raise PermissionError("Token has expired")\n'
         "    return payload.claims\n\n\n"
-        "def get_user_profile_ handler(\n"
+        "def get_user_profile_handler(\n"
         "    service: JWTAuthService,\n"
         "    authorization_header: str,\n"
         "    timestamp: int,\n"
@@ -162,7 +162,7 @@ def sample_repo(tmp_path: Path) -> Path:
         "        'roles': list(claims.roles),\n"
         "        'is_admin': is_admin,\n"
         "        'issuer': service.config.issuer,\n"
-        "    }\n".replace("get_user_profile_ handler", "get_user_profile_handler"),
+        "    }\n",
         encoding="utf-8",
     )
 

@@ -3,17 +3,9 @@ from __future__ import annotations
 import pytest
 
 from contextcraft.languages.base import Language, LanguageSpec
-from contextcraft.languages.builtin import CppLanguage, default_registry
+from contextcraft.languages.builtin import default_registry
 from contextcraft.languages.javascript.language import JavaScriptLanguage
 from contextcraft.languages.registry import LanguageRegistry
-
-
-def test_registry_registers_and_gets_languages() -> None:
-    registry = LanguageRegistry()
-    registry.register(JavaScriptLanguage)
-
-    assert registry.get("javascript") is JavaScriptLanguage
-    assert registry.get("unknown") is None
 
 
 @pytest.mark.parametrize("path", ["app.js", "src/app.mjs", "app.cjs", "app.jsx", "src/APP.JS"])
@@ -113,10 +105,9 @@ def test_registry_aliases_and_ignore_aggregation_are_transactional() -> None:
 
 
 def test_cpp_headers_are_shared_candidates() -> None:
-    candidates = default_registry().detect_candidates("service.h")
+    registry = default_registry()
 
-    assert len(candidates) == 2
-    assert CppLanguage in candidates
+    assert registry.detect_candidates("service.h") == [registry.get("c"), registry.get("cpp")]
 
 
 @pytest.mark.parametrize(

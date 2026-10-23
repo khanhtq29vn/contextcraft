@@ -55,7 +55,7 @@ def test_web_api_compile_local_repository(sample_repo: Path) -> None:
     assert payload["stats"]["compressed_tokens"] <= 1500
     assert payload["stats"]["secrets_redacted"] >= 1
     assert "sk-proj-1234567890" not in payload["content"]
-    assert len(payload["files"]) >= 5
+    assert "src/auth/models.py" in {file["rel_path"] for file in payload["files"]}
 
 
 def test_web_url_swap_route_and_invalid_inputs(sample_repo: Path) -> None:
