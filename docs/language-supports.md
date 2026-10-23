@@ -1,6 +1,6 @@
 # Language Support
 
-ContextCraft registers **33 languages and formats** by default, with
+ContextCraft registers **35 languages and formats** by default, with
 language-specific parsing and summary builders.
 
 ## Supported languages and formats
@@ -31,6 +31,8 @@ and the Python API; they are not CLI flags.
 | Lua              | `lua`        | `.lua`                                             |                                    |
 | R                | `r`          | `.r`, `.R`                                         |                                    |
 | Bash / shell     | `bash`       | `.sh`, `.bash`, `.zsh`                             |                                    |
+| Elixir           | `elixir`     | `.ex`, `.exs`                                      |                                    |
+| Zig              | `zig`        | `.zig`                                             |                                    |
 
 ### Structured data and markup
 
@@ -180,258 +182,18 @@ compiler = ContextCraft(registry=registry)
 result = compiler.compile("./my-repo")
 ```
 
-`default_registry()` returns a fresh registry containing the built-in languages.
-Registering your class adds support to that registry; it does not modify other
-compiler instances or the installed package.
+Each compiler gets a fresh default registry. Custom registration applies only to
+the registry you pass in; the CLI does not load custom classes automatically.
 
-The specification controls:
+To change an existing language's builders, replace its entry in a new registry
+rather than appending another class for the same extension. Registration order
+determines which parser is tried first.
 
-- **`id`:** the language name reported in analysis results. It must be unique.
-- **`parser_id`:** the grammar name passed to `tree-sitter-language-pack`. The
-  custom ID does not need to match it. Registration does not install a grammar.
-- **`extensions`:** extensions including the leading dot, such as `.customjs`.
-  Detection uses the final suffix, so `.custom.js` still matches `.js`.
-- **`filenames`:** exact basenames, without directory paths.
-- **`aliases`:** additional names for `registry.get()`, not extra filename rules.
-  Aliases must also be unique.
-- **`ignore_patterns`:** repository-wide exclusions contributed by your language.
+For a new grammar, implement an extractor, skeleton builder, and signature
+builder, then register a `Language` subclass. Use the built-in language packages
+as examples and the [Language Extension API](api/languages.md) for the interfaces.
+Builders should preserve source with syntax errors and avoid mutating the AST.
+All source ranges are half-open UTF-8 byte offsets into the sanitized source.
 
-Pass the registry to `ContextCraft(registry=registry)` to use it for both
-`compile()` and `analyze_repository()`. Custom registration is a Python API
-feature; the stock CLI does not load these classes automatically.
-
-### Customize summaries for an existing language
-
-You can replace either summary builder while reusing the existing parser and
-extractor. Builders receive the language specification in their constructor
-and a `ParsedAst` in `build()`. The AST contains sanitized source bytes; use
-`parsed.text(range)` to read a symbol's source span.
-
-This complete example changes the JavaScript signature tier to include only
-public, top-level function headers:
-
-```python
-from dataclasses import replace
-
-from contextcraft import ContextCraft, LanguageRegistry, default_registry
-from contextcraft.ast import ParsedAst
-from contextcraft.languages.base import SignaturesBuilder
-from contextcraft.languages.javascript.language import JavaScriptLanguage
-
-
-class CustomSignaturesBuilder(SignaturesBuilder):
-    def build(self, parsed: ParsedAst) -> str:
-        if parsed.has_errors:
-            return parsed.source.decode("utf-8")
-
-        headers = [
-            parsed.text(symbol.signature_range)
-            for symbol in parsed.symbols
-            if symbol.kind == "function" and symbol.is_public and symbol.parent is None
-        ]
-        return "\n".join(headers) + "\n" if headers else ""
-
-
-class ProjectJavaScript(JavaScriptLanguage):
-    spec = replace(JavaScriptLanguage.spec, id="project-javascript")
-    signatures_builder = CustomSignaturesBuilder
-
-
-registry = LanguageRegistry()
-for language in default_registry().languages:
-    registry.register(ProjectJavaScript if language is JavaScriptLanguage else language)
-
-compiler = ContextCraft(registry=registry)
-result = compiler.compile("./my-repo")
-```
-
-The replacement registry above keeps the other built-in languages, but registers
-`ProjectJavaScript` **instead of** the built-in JavaScript class. Simply adding
-another class for `.js` to the default registry would leave the built-in parser
-first in line, so your custom builder would normally not be selected.
-
-Use the same approach with a `SkeletonBuilder` subclass and `skeleton_builder`
-to change the skeleton tier. Builders should return text without modifying the
-AST. Preserve the source when it has syntax errors. Returning an empty summary,
-or one that costs more tokens than the higher tier, makes the elider reuse that
-higher tier instead. The optimizer still decides which tier reaches the output;
-a custom signature builder is used when `SIGS` is selected.
-
-### Write your own extractor and builders
-
-This example adds INI support from your own application. It uses the `ini`
-Tree-sitter grammar and implements its own extraction and summaries.
-
-Given this file:
-
-```ini
-[database]
-host = database.internal.example-company.local
-password = example-long-password-for-local-development-only
-```
-
-The extractor records each section as a parent symbol and each setting as a
-child. A setting's key becomes its signature range, and its value becomes the
-range that the skeleton builder replaces. `build_scopes()` supplies a file-level
-scope; section relationships are represented by the symbols' `parent` links.
-
-The complete example below creates a sample repository, registers the language,
-and prints both summary tiers:
-
-```python
-from pathlib import Path
-from tempfile import TemporaryDirectory
-
-from tree_sitter import Node
-
-from contextcraft import ContextCraft, FidelityLevel, default_registry
-from contextcraft.ast import ByteRange, ParsedAst, Symbol
-from contextcraft.ast.scope import Scope, ScopeGraph
-from contextcraft.languages.base import (
-    BaseExtractor,
-    Language,
-    LanguageSpec,
-    SignaturesBuilder,
-    SkeletonBuilder,
-)
-
-
-def span(node: Node) -> ByteRange:
-    return ByteRange(node.start_byte, node.end_byte)
-
-
-class CustomExtractor(BaseExtractor):
-    def build_scopes(self, root: Node, source: bytes) -> ScopeGraph:
-        return ScopeGraph(scopes=[Scope(0, len(source), kind="module")])
-
-    def extract(self, root: Node, source: bytes) -> ParsedAst:
-        parsed = super().extract(root, source)
-        if parsed.has_errors:
-            return parsed
-
-        for section in root.named_children:
-            if section.type != "section":
-                continue
-            header = next(child for child in section.named_children if child.type == "section_name")
-            header_text = parsed.text(span(header)).strip()
-            parent = Symbol(
-                name=header_text[1:-1].strip(),
-                kind="section",
-                declaration_range=span(section),
-                signature_range=span(header),
-            )
-            parsed.symbols.append(parent)
-
-            for setting in section.named_children:
-                if setting.type != "setting":
-                    continue
-                key = next(
-                    child for child in setting.named_children if child.type == "setting_name"
-                )
-                value = next(
-                    (child for child in setting.named_children if child.type == "setting_value"),
-                    None,
-                )
-                value_range = None
-                if value is not None:
-                    raw = source[value.start_byte : value.end_byte]
-                    start = value.start_byte + len(raw) - len(raw.lstrip(b" \t"))
-                    value_range = ByteRange(start, value.end_byte)
-
-                parsed.symbols.append(
-                    Symbol(
-                        name=parsed.text(span(key)).strip(),
-                        kind="setting",
-                        declaration_range=span(setting),
-                        signature_range=span(key),
-                        body_range=value_range,
-                        parent=parent,
-                    )
-                )
-        return parsed
-
-
-class CustomSkeletonBuilder(SkeletonBuilder):
-    def build(self, parsed: ParsedAst) -> str:
-        if parsed.has_errors:
-            return parsed.source.decode("utf-8")
-
-        ranges = sorted(
-            (symbol.body_range for symbol in parsed.symbols if symbol.body_range is not None),
-            key=lambda value: value.start_byte,
-            reverse=True,
-        )
-        source = bytearray(parsed.source)
-        for value in ranges:
-            source[value.start_byte : value.end_byte] = b'"<elided>"'
-        return source.decode("utf-8")
-
-
-class CustomSignaturesBuilder(SignaturesBuilder):
-    def build(self, parsed: ParsedAst) -> str:
-        if parsed.has_errors:
-            return parsed.source.decode("utf-8")
-
-        lines = [parsed.text(symbol.signature_range).strip() for symbol in parsed.symbols]
-        return "\n".join(lines) + "\n" if lines else ""
-
-
-class CustomIni(Language):
-    spec = LanguageSpec(
-        id="custom-ini",
-        parser_id="ini",
-        extensions=frozenset({".ini"}),
-    )
-    extractor = CustomExtractor
-    skeleton_builder = CustomSkeletonBuilder
-    signatures_builder = CustomSignaturesBuilder
-
-
-registry = default_registry()
-registry.register(CustomIni)
-compiler = ContextCraft(registry=registry)
-
-with TemporaryDirectory() as directory:
-    sample = Path(directory) / "settings.ini"
-    sample.write_text(
-        "[database]\nhost = database.internal.example-company.local\npassword = example-long-password-for-local-development-only\n",
-        encoding="utf-8",
-    )
-    file = compiler.analyze_repository(directory)[0]
-    print(file.tiers[FidelityLevel.SKELETON].content)
-    print(file.tiers[FidelityLevel.SIGNATURES].content)
-    result = compiler.compile(directory)
-```
-
-Skeleton output:
-
-```ini
-[database]
-host = "<elided>"
-password = "<elided>"
-```
-
-Signature output:
-
-```text
-[database]
-host
-password
-```
-
-All ranges use UTF-8 byte offsets into `ParsedAst.source`. The skeleton builder
-edits from the end of the file backward so replacing one value does not shift
-the ranges of earlier values. Neither builder modifies the original AST.
-
-For your own grammar, change `parser_id` to its available
-`tree-sitter-language-pack` name and adapt the extractor to that grammar's node
-types. Populate `ParsedAst.imports` and `ScopeGraph` bindings/references when your
-language has dependencies or names you want included in repository analysis.
-
-Use `LanguageRegistry()` without built-ins if you want only your own detection
-rules; other files will use the `text` fallback. A `parser_id` of `None` also
-preserves text and bypasses the extractor, so it is not a way to register a
-custom parsing function.
-
-See [Architecture](architecture.md) and the [API reference](api-reference.md)
-for pipeline and SDK details.
+See [Architecture](architecture.md) for the compilation pipeline and the
+[API reference](api-reference.md) for SDK usage.

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from contextcraft.languages.java.imports import ImportTrimmer
-from contextcraft.languages.structural import StructuralSignaturesBuilder
+from contextcraft.languages.structural import BlockSignaturesBuilder
 
 
-class SignaturesBuilder(StructuralSignaturesBuilder):
+class SignaturesBuilder(BlockSignaturesBuilder):
     import_trimmer = ImportTrimmer

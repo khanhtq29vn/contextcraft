@@ -7,6 +7,7 @@ from contextcraft.languages.cpp.language import CppLanguage as CppLanguage
 from contextcraft.languages.csharp.language import CSharpLanguage as CSharpLanguage
 from contextcraft.languages.css.language import CSSLanguage as CSSLanguage
 from contextcraft.languages.dockerfile.language import DockerfileLanguage as DockerfileLanguage
+from contextcraft.languages.elixir.language import ElixirLanguage as ElixirLanguage
 from contextcraft.languages.go.language import GoLanguage as GoLanguage
 from contextcraft.languages.graphql.language import GraphQLLanguage as GraphQLLanguage
 from contextcraft.languages.hcl.language import HCLLanguage as HCLLanguage
@@ -35,6 +36,7 @@ from contextcraft.languages.toml.language import TOMLLanguage as TOMLLanguage
 from contextcraft.languages.tsx.language import TSXLanguage as TSXLanguage
 from contextcraft.languages.typescript.language import TypeScriptLanguage as TypeScriptLanguage
 from contextcraft.languages.yaml.language import YAMLLanguage as YAMLLanguage
+from contextcraft.languages.zig.language import ZigLanguage as ZigLanguage
 
 
 def default_registry() -> LanguageRegistry:
@@ -73,6 +75,8 @@ def default_registry() -> LanguageRegistry:
         DockerfileLanguage,
         MakefileLanguage,
         CMakeLanguage,
+        ElixirLanguage,
+        ZigLanguage,
     ):
         registry.register(language)
     return registry

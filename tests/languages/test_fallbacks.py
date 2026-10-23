@@ -8,7 +8,7 @@ from contextcraft.ast.parser import parse
 from contextcraft.languages.builtin import default_registry
 
 
-@pytest.mark.parametrize("language_id", ["ruby", "markdown", "protobuf"])
+@pytest.mark.parametrize("language_id", ["ruby", "markdown", "protobuf", "elixir", "zig"])
 def test_missing_grammars_preserve_source(
     language_sources: dict[str, bytes], language_id: str
 ) -> None:
@@ -33,6 +33,8 @@ def test_missing_grammars_preserve_source(
         ("lua", b"function run(value)\n"),
         ("r", b"run <- function(value) {"),
         ("bash", b"run() {"),
+        ("elixir", b"defmodule Client do\n def run(value) do\n"),
+        ("zig", b"pub fn run(value: i32) i32 {"),
     ],
 )
 def test_incomplete_languages_preserve_source(language_id: str, source: bytes) -> None:

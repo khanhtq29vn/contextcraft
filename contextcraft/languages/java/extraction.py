@@ -11,11 +11,16 @@ if TYPE_CHECKING:
 
 
 class JavaRules(GenericExtractor):
-    IMPORT_NODE_TYPES: ClassVar[frozenset[str]] = frozenset({"import_declaration"})
+    IMPORT_NODE_TYPES: ClassVar[frozenset[str]] = frozenset(
+        {"package_declaration", "import_declaration"}
+    )
     NODE_TYPES: ClassVar[dict[str, str]] = {
         "class_declaration": "class",
         "interface_declaration": "interface",
         "enum_declaration": "enum",
+        "record_declaration": "class",
+        "constructor_declaration": "constructor",
+        "compact_constructor_declaration": "constructor",
         "method_declaration": "method",
     }
 
@@ -31,9 +36,25 @@ class JavaRules(GenericExtractor):
     def elidable_body_range(
         self, node: Node, source: bytes, doc_end_byte: int | None
     ) -> ByteRange | None:
-        if node.type != "method_declaration":
+        if self.NODE_TYPES.get(node.type) not in {"method", "constructor"}:
             return None
         return self.brace_body_range(self.body_node(node), source)
+
+    def parameter_nodes(self, node: Node) -> list[Node]:
+        parameters = node.child_by_field_name("parameters")
+        if parameters is None:
+            return []
+        return [
+            name
+            for parameter in parameters.named_children
+            if (name := parameter.child_by_field_name("name")) is not None
+        ]
+
+    def is_exported(self, node: Node, name: str, source: bytes) -> bool:
+        modifiers = next(
+            (child for child in node.named_children if child.type == "modifiers"), None
+        )
+        return modifiers is None or all(child.type != "private" for child in modifiers.children)
 
     def is_doc_comment(self, node: Node, source: bytes) -> bool:
         return node.type == "block_comment" and source[node.start_byte : node.end_byte].startswith(

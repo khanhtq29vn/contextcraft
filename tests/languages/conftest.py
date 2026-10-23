@@ -4,6 +4,20 @@ import pytest
 
 LANGUAGE_CASES = [
     (
+        "elixir",
+        "client.ex",
+        b'defmodule Client do\n alias App.Service\n @doc "Run documentation."\n def run(value) do\n Service.run(value)\n end\nend\n',
+        "Client.run",
+        ["App.Service"],
+    ),
+    (
+        "zig",
+        "client.zig",
+        b'const service = @import("service.zig");\n/// Client documentation.\npub const Client = struct {\n value: i32,\n pub fn run(value: i32) i32 { return service.run(value); }\n};\n',
+        "Client.run",
+        ["service.zig"],
+    ),
+    (
         "ruby",
         "client.rb",
         b'require_relative "service"\nmodule App\n class Client\n # Docs\n def run(value)\n service(value)\n end\n end\nend\n',

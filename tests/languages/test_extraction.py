@@ -9,7 +9,18 @@ from contextcraft.ast.parser import parse
 from contextcraft.elider import Elider, FidelityLevel
 from contextcraft.languages.builtin import default_registry
 
-PROGRAMMING_LANGUAGES = {"ruby", "php", "swift", "kotlin", "scala", "lua", "r", "bash"}
+PROGRAMMING_LANGUAGES = {
+    "ruby",
+    "php",
+    "swift",
+    "kotlin",
+    "scala",
+    "lua",
+    "r",
+    "bash",
+    "elixir",
+    "zig",
+}
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,6 @@
 # Language Extension API
 
-For supported formats and runnable custom-language examples, see
+For supported formats and a custom-language registration example, see
 [Language Support](../language-supports.md).
 
 ## Registry
@@ -26,15 +26,6 @@ own language before passing it to `ContextCraft(registry=registry)`.
   registration order; an unknown path returns an empty list.
 - `languages` is a tuple of registered classes. `ignore_patterns` combines
   their ignore patterns without duplicates.
-
-```python
-from contextcraft import default_registry
-
-registry = default_registry()
-python = registry.get("python")
-assert python is not None
-assert python in registry.detect_candidates("example.py")
-```
 
 ## Language definition
 
@@ -118,11 +109,6 @@ builder needs additional context.
 
 `Language.build_selected()` uses the signature builder, falling back to a
 source-preserving skeleton when needed.
-
-Each signature builder selects an `import_trimmer` class. Language-specific
-classification lives in that language's `imports` module; the shared base only
-handles reference matching and conservative fallback. TypeScript and TSX reuse
-the JavaScript classifier for their common import syntax.
 
 Built-in signature builders trim known unused named imports using their grammar.
 This covers Python, JavaScript/TypeScript/TSX, Rust, Go, Java, C#, Kotlin, Scala,

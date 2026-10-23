@@ -73,14 +73,11 @@ class StructuralExtractor(BaseExtractor):
                 if kind is not None:
                     name = rules.symbol_name(node, source)
                     _, doc = rules.extract_docstring(node, outer, source)
-                    body = rules.body_node(node)
-                    end = body.start_byte if body is not None else node.end_byte
-                    end = outer.start_byte + len(source[outer.start_byte : end].rstrip())
                     symbol = Symbol(
                         name=name,
                         kind=kind,
-                        declaration_range=ByteRange(outer.start_byte, outer.end_byte),
-                        signature_range=ByteRange(outer.start_byte, end),
+                        declaration_range=rules.declaration_range(node, outer, source),
+                        signature_range=rules.signature_range(node, outer, source),
                         body_range=rules.elidable_body_range(
                             node, source, doc.end_byte if doc else None
                         ),
@@ -94,10 +91,22 @@ class StructuralExtractor(BaseExtractor):
                     symbols.append((outer, symbol, node.type))
                     if name is not None and name_node is not None:
                         bind(name_node, scope, name)
-                    if kind in {"function", "method", "class", "struct", "trait", "module"}:
+                    if kind in {
+                        "function",
+                        "method",
+                        "constructor",
+                        "class",
+                        "enum",
+                        "interface",
+                        "struct",
+                        "trait",
+                        "module",
+                    }:
                         scope = Scope(node.start_byte, node.end_byte, parent=scope, kind=kind)
                         graph.scopes.append(scope)
                         scopes.append((outer, scope))
+                        for parameter in rules.parameter_nodes(node):
+                            bind(parameter, scope)
                     if node != outer:
                         unwrapped.add(node.id)
 

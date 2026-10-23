@@ -87,6 +87,9 @@ class DependencyGraphScorer:
                     symbol_definers[sym.qualified_name].add(rel_path)
             for mod_key in self._module_keys_for_path(rel_path):
                 module_index[mod_key].add(rel_path)
+            for symbol in file_obj.symbols:
+                if symbol.kind == "module" and symbol.qualified_name is not None:
+                    module_index[symbol.qualified_name].add(rel_path)
         query_terms = set(self._tokenize_query(self.config.focus_query))
         num_files = len(files)
         for src_file in files:

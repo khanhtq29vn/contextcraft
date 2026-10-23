@@ -122,6 +122,8 @@ def test_cpp_headers_are_shared_candidates() -> None:
         ("hcl", "terraform.tfvars"),
         ("cmake", "modules/common.cmake"),
         ("graphql", "schema.gql"),
+        ("elixir", "mix.exs"),
+        ("zig", "src/MAIN.ZIG"),
     ],
 )
 def test_language_filename_detection(language_id: str, path: str) -> None:

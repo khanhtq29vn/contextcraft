@@ -39,6 +39,21 @@ class LanguageExtractor(ABC):
     def body_node(self, node: Node) -> Node | None:
         return node.child_by_field_name("body")
 
+    def declaration_range(self, node: Node, outer_node: Node, source: bytes) -> ByteRange:
+        """Include any language-specific modifiers surrounding the declaration."""
+        return self.node_range(outer_node)
+
+    def signature_range(self, node: Node, outer_node: Node, source: bytes) -> ByteRange:
+        """Return the header before the body, excluding trailing whitespace."""
+        body = self.body_node(node)
+        start = self.declaration_range(node, outer_node, source).start_byte
+        end = body.start_byte if body is not None else node.end_byte
+        return ByteRange(start, start + len(source[start:end].rstrip()))
+
+    def parameter_nodes(self, node: Node) -> list[Node]:
+        """Return parameter binding sites not handled by the shared grammar rules."""
+        return []
+
     @abstractmethod
     def elidable_body_range(
         self, node: Node, source: bytes, doc_end_byte: int | None

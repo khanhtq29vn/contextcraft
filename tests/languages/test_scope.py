@@ -6,7 +6,9 @@ from contextcraft.ast.parser import parse
 from contextcraft.languages.builtin import default_registry
 
 
-@pytest.mark.parametrize("language_id", ["ruby", "php", "swift", "kotlin", "scala", "lua", "r"])
+@pytest.mark.parametrize(
+    "language_id", ["ruby", "php", "swift", "kotlin", "scala", "lua", "r", "elixir", "zig"]
+)
 def test_native_function_parameters_resolve_in_function_scopes(
     language_id: str, language_sources: dict[str, bytes]
 ) -> None:

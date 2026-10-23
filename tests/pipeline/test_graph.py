@@ -204,3 +204,37 @@ def test_unfocused_tests_do_not_gain_pagerank_through_reverse_dependencies(tmp_p
         graph = DependencyGraphScorer(config).score_files(files)
         assert graph.has_edge(source, test)
         assert by_path[test].pagerank_score > unfocused_rank
+
+
+@pytest.mark.parametrize(
+    "files,source,target",
+    [
+        (
+            {
+                "lib/client.ex": "defmodule App.Client do\n alias App.Service\nend\n",
+                "lib/unrelated_filename.ex": "defmodule App.Service do\n def run(value), do: value\nend\n",
+            },
+            "lib/client.ex",
+            "lib/unrelated_filename.ex",
+        ),
+        (
+            {
+                "lib/client.zig": 'const service = @import("service.zig");\n',
+                "lib/service.zig": "pub fn run(value: i32) i32 { return value; }\n",
+            },
+            "lib/client.zig",
+            "lib/service.zig",
+        ),
+    ],
+)
+def test_graph_resolves_declared_modules_and_zig_relative_imports(
+    tmp_path: Path, files: dict[str, str], source: str, target: str
+) -> None:
+    for name, content in files.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content.encode())
+    analyses = ContextCraft().analyze_repository(tmp_path)
+    graph = DependencyGraphScorer().build_dependency_graph(analyses)
+
+    assert graph.has_edge(source, target)
