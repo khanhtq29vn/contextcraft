@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +11,7 @@ from contextcraft.cli import app
 from contextcraft.elider import TokenCounter
 
 runner = CliRunner()
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def test_cli_execution_and_file_output(sample_repo: Path, tmp_path: Path) -> None:
@@ -66,10 +68,15 @@ def test_cli_output_excludes_only_its_exact_path(tmp_path: Path) -> None:
 
 def test_cli_encoding_flag_selects_tokenizer_encoding(sample_repo: Path, tmp_path: Path) -> None:
     """Verify `--encoding` / `-enc` is advertised and forwarded to token accounting."""
-    help_res = runner.invoke(app, ["--help"])
+    help_res = runner.invoke(
+        app,
+        ["--help"],
+        env={"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "120"},
+    )
     assert help_res.exit_code == 0
-    assert "--encoding" in help_res.stdout
-    assert "-enc" in help_res.stdout
+    clean_help = _ANSI_ESCAPE_RE.sub("", help_res.stdout)
+    assert "--encoding" in clean_help
+    assert "-enc" in clean_help
 
     observed: list[str] = []
     original_init = TokenCounter.__init__
