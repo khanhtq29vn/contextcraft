@@ -24,6 +24,13 @@ def test_get_version_without_distribution_metadata(monkeypatch: pytest.MonkeyPat
     assert utils.get_version() == "0.0.0"
 
 
+@pytest.fixture
+def posix_patterns(monkeypatch: pytest.MonkeyPatch) -> None:
+    # On Windows a backslash in a pin pattern is a separator, not a gitignore escape.
+    monkeypatch.setattr(utils, "_WINDOWS", False)
+
+
+@pytest.mark.usefixtures("posix_patterns")
 @pytest.mark.parametrize(
     ("pattern", "rel_path", "expected"),
     [
@@ -58,12 +65,14 @@ def test_matches_path_patterns(pattern: str, rel_path: str, expected: bool) -> N
     assert utils.matches_path_patterns(rel_path, [pattern]) is expected
 
 
+@pytest.mark.usefixtures("posix_patterns")
 def test_matches_path_patterns_supports_negation() -> None:
     assert utils.matches_path_patterns("app/core.py", ["*.py", "!free.py"])
     assert not utils.matches_path_patterns("app/free.py", ["*.py", "!free.py"])
     assert not utils.matches_path_patterns("app/core.py", [])
 
 
+@pytest.mark.usefixtures("posix_patterns")
 def test_matches_path_patterns_anchors_negated_dot_slash_patterns() -> None:
     assert not utils.matches_path_patterns("legacy.py", ["*.py", "!./legacy.py"])
     assert utils.matches_path_patterns("pkg/legacy.py", ["*.py", "!./legacy.py"])
@@ -72,11 +81,13 @@ def test_matches_path_patterns_anchors_negated_dot_slash_patterns() -> None:
 def test_matches_path_patterns_accepts_backslashes_only_on_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(utils, "_WINDOWS", False)
     assert not utils.matches_path_patterns("src/auth/jwt.py", ["src\\auth\\jwt.py"])
     monkeypatch.setattr(utils, "_WINDOWS", True)
     assert utils.matches_path_patterns("src/auth/jwt.py", ["src\\auth\\jwt.py"])
 
 
+@pytest.mark.usefixtures("posix_patterns")
 def test_pin_patterns_treat_whitespace_like_gitignore() -> None:
     assert utils._normalize_pattern("legacy.py  ") == "legacy.py"
     assert utils._normalize_pattern("notes\\ ") == "notes\\ "

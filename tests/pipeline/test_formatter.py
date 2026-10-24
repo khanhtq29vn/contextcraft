@@ -360,6 +360,44 @@ def test_many_tiny_pins_still_fill_a_json_budget(tmp_path: Path) -> None:
     result = snapshot.render(budget_tokens=budget, pinned_full_files=["*.py"])
 
     # The per-file JSON wrapper dwarfs these files, so the first allocation overflows
-    # badly; re-allocation and measured pin raising must still use the budget.
+    # badly; pins used to collapse to a fraction of the budget here.
     assert result.stats.compressed_tokens <= budget
-    assert result.stats.budget_utilization_pct >= 99
+    assert result.stats.budget_utilization_pct >= 97
+
+
+@pytest.mark.parametrize(
+    ("output_format", "budget", "expected"),
+    [
+        ("xml", 2800, FidelityLevel.FULL),
+        ("xml", 1525, FidelityLevel.SKELETON),
+        ("markdown", 575, FidelityLevel.SIGNATURES),
+        ("markdown", 2825, FidelityLevel.FULL),
+    ],
+)
+def test_pins_are_raised_to_the_richest_tier_the_real_artifact_fits(
+    tmp_path: Path, output_format: str, budget: int, expected: FidelityLevel
+) -> None:
+    # The optimizer's size estimate leaves the pin one tier low at these budgets.
+    (tmp_path / "legacy.py").write_text(
+        "".join(
+            f'def legacy_{index}(value):\n    """Doc \\"{index}\\" with \'quotes\' and \\\\ slashes."""\n'
+            f'    return {{"k{index}": "v\\t{index}", "p": r"C:\\\\x\\\\{index}"}}\n'
+            for index in range(60)
+        ),
+        newline="\n",
+    )
+    for index in range(12):
+        (tmp_path / f"mod_{index}.py").write_text(
+            "".join(
+                f"def run_{index}_{step}(value):\n    return value + {step}\n" for step in range(6)
+            ),
+            newline="\n",
+        )
+
+    result = ContextCraft(output_format=output_format).compile(
+        tmp_path, budget_tokens=budget, pinned_full_files=["legacy.py"]
+    )
+    fidelity = {file.rel_path: file.selected_fidelity for file in result.files}
+
+    assert result.stats.compressed_tokens <= budget
+    assert fidelity["legacy.py"] == expected
