@@ -329,15 +329,20 @@ class DependencyGraphScorer:
             return False
         filename = PurePosixPath(rel_path).name
         for pattern in focus_patterns:
-            clean_pat = pattern.strip().lstrip("./")
+            # Strip only "./" segments and root slashes; dotfiles like ".env" keep their dot.
+            clean_pat = pattern.strip().replace("\\", "/")
+            while clean_pat.startswith("./"):
+                clean_pat = clean_pat[2:]
+            clean_pat = clean_pat.lstrip("/")
             if not clean_pat:
                 continue
+            directory = clean_pat.rstrip("/")
             if (
                 rel_path == clean_pat
                 or filename == clean_pat
-                or fnmatch.fnmatch(rel_path, clean_pat)
-                or fnmatch.fnmatch(filename, clean_pat)
-                or (clean_pat in rel_path)
+                or fnmatch.fnmatchcase(rel_path, clean_pat)
+                or fnmatch.fnmatchcase(filename, clean_pat)
+                or (bool(directory) and rel_path.startswith(directory + "/"))
             ):
                 return True
         return False
