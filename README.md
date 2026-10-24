@@ -116,6 +116,7 @@ CONTEXTCRAFT_WEB_ROOT="$HOME/repositories" uv run uvicorn web.app:app --host 127
                                      ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │ 5. TokenBudgetOptimizer (O(N log N) Heap + Prefix Swap MCKP Solver)        │
+│    • Declarations weighted by (FULL tokens)^(1/3): hubs outrank trivia     │
 │    • Marginal utility density (ΔUtility / ΔTokens) prevents "God Objects"  │
 │      from hogging FULL budget; verified by ArtifactFormatter post-check    │
 └────────────────────────────────────────────────────────────────────────────┘
@@ -147,7 +148,7 @@ uv run python benchmarks/run_benchmark.py . --budgets 4000,6000,8000,12000,16000
 
 When applying `ContextCraft` to large, long-lived enterprise repositories:
 
-1. **Built-in "God Object" Protection:** `TokenBudgetOptimizer` allocates tiers by **marginal utility density** ($\rho = \Delta \text{Utility} / \Delta \text{Tokens}$), and `DependencyGraphScorer` normalizes document lengths via **BM25F** ($b = 0.75$). If a legacy codebase contains a massive 10,000-token "God Class" with high PageRank, upgrading it from `SKEL` ($u = 0.82$) to `FULL` ($u = 1.00$) has a very low density $\rho$ due to the huge $\Delta \text{Tokens}$ denominator. The solver automatically keeps the God Class at `SKEL` (preserving its interface and docstrings) while saving thousands of tokens to keep surrounding business-logic modules at `FULL`.
+1. **Built-in "God Object" Protection:** `TokenBudgetOptimizer` weights a file's declarations (`SIGS`, `SKEL`) by PageRank × its content mass ($T^{1/3}$, where $T$ is its `FULL` token count) and allocates tiers by **marginal utility density** ($\rho = \Delta \text{Utility} / \Delta \text{Tokens}$); `DependencyGraphScorer` normalizes document lengths via **BM25F** ($b = 0.75$). The content mass keeps large central files from being dropped in favor of tiny peripheral ones, while the function bodies that `FULL` adds stay size-blind: if a legacy codebase contains a massive 10,000-token "God Class" with high PageRank, upgrading it from `SKEL` ($u = 0.82$) to `FULL` ($u = 1.00$) still has a very low density $\rho$ due to the huge $\Delta \text{Tokens}$ denominator. The solver automatically keeps the God Class at `SKEL` (preserving its interface and docstrings) while saving thousands of tokens to keep surrounding business-logic modules at `FULL`.
 2. **Scope Chaining for Targeted Debugging:** For surgical bug hunting in a specific subsystem of a massive monorepo, combine `--include` / `--exclude` (or `.contextignore`) with `--focus-file`:
    ```bash
    contextcraft . --include "contextcraft/languages/**" --focus-file "contextcraft/languages/structural.py" --budget 12k

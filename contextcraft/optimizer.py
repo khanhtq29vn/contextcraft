@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import heapq
+import math
 from bisect import bisect_right
 from dataclasses import dataclass
 
@@ -31,6 +32,12 @@ class BudgetAllocationSummary:
 class TokenBudgetOptimizer:
     """Allocate whole-file fidelity tiers using PageRank-weighted utility.
 
+    Declarations (SIGS, SKEL) are worth pagerank * semantic_utility * mass, where
+    mass = full_tokens ** (1/3): a large central file exposes more structure than
+    a tiny one, so its outline outbids tiny peripheral files. The bodies FULL adds
+    keep their size-blind value, so a giant file's SKEL -> FULL step is no more
+    attractive per token than before (God-object protection).
+
     Greedy marginal upgrades and bounded pairwise swaps approximate the
     multiple-choice knapsack objective; they do not guarantee a global optimum.
     Wrapper costs are estimates. ArtifactFormatter enforces the emitted budget.
@@ -39,6 +46,7 @@ class TokenBudgetOptimizer:
     FILE_WRAPPER_OVERHEAD_TOKENS: int = 18
     BASE_DOCUMENT_OVERHEAD_TOKENS: int = 115
     PER_FILE_TREE_ENTRY_TOKENS: int = 9
+    CONTENT_MASS_EXPONENT: float = 1 / 3
     _ORDERED_TIERS: tuple[FidelityLevel, ...] = (
         FidelityLevel.TREE,
         FidelityLevel.SIGNATURES,
@@ -112,9 +120,16 @@ class TokenBudgetOptimizer:
             return 0
         return raw_tier_cost + cls.FILE_WRAPPER_OVERHEAD_TOKENS
 
-    @staticmethod
-    def tier_utility(file_obj: FileAnalysis, level: FidelityLevel) -> float:
-        return file_obj.pagerank_score * level.semantic_utility
+    @classmethod
+    def tier_utility(cls, file_obj: FileAnalysis, level: FidelityLevel) -> float:
+        structure = min(level.semantic_utility, FidelityLevel.SKELETON.semantic_utility)
+        bodies = level.semantic_utility - structure
+        return file_obj.pagerank_score * (structure * cls._content_mass(file_obj) + bodies)
+
+    @classmethod
+    def _content_mass(cls, file_obj: FileAnalysis) -> float:
+        full = file_obj.tiers.get(FidelityLevel.FULL)
+        return math.pow(max(full.tokens if full is not None else 0, 1), cls.CONTENT_MASS_EXPONENT)
 
     def _greedy_marginal_allocation(
         self, files: list[FileAnalysis], net_budget: int, used_tokens: int = 0

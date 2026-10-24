@@ -170,3 +170,42 @@ def test_full_tree_refreshes_fidelity_badges(sample_repo: Path) -> None:
 
     assert after != before
     assert after == formatter.render_directory_tree(files, "repo")
+
+
+def test_large_overflows_are_trimmed_in_a_few_renders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for index in range(150):
+        (tmp_path / f"strings_{index:03}.py").write_text(
+            "".join(f'S{step} = "\\"q\\" \\\\ \\t {index}-{step}"\n' for step in range(8))
+        )
+    renders = 0
+    render = ArtifactFormatter._render
+
+    def counting_render(
+        self: ArtifactFormatter, name: str, files: list[FileAnalysis], tree: str
+    ) -> str:
+        nonlocal renders
+        renders += 1
+        return render(self, name, files, tree)
+
+    monkeypatch.setattr(ArtifactFormatter, "_render", counting_render)
+    snapshot = ContextCraft(output_format="json").analyze(tmp_path)
+    budget = int(sum(file.raw_tokens for file in snapshot.files) * 1.2)
+
+    result = snapshot.render(budget_tokens=budget)
+
+    # JSON escaping overflows the estimate by thousands of tokens; trimming one file per
+    # render took about 60 renders.
+    assert result.stats.compressed_tokens <= budget
+    assert result.stats.budget_utilization_pct >= 95
+    assert renders <= 15
+
+
+@pytest.mark.parametrize(("output_format", "low", "high"), [("markdown", 10, 24), ("json", 40, 80)])
+def test_file_wrapper_cost_excludes_one_time_section_headers(
+    output_format: str, low: int, high: int
+) -> None:
+    formatter = ArtifactFormatter(CompilationConfig(output_format=output_format))
+
+    assert low <= formatter._file_wrapper_tokens("repo", "repo/\n") <= high

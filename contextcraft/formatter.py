@@ -7,7 +7,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from contextcraft.elider import FidelityLevel, TokenCounter, TokenCounterProtocol
+from contextcraft.ast import ParsedAst
+from contextcraft.elider import FidelityLevel, RenderedTier, TokenCounter, TokenCounterProtocol
 from contextcraft.models import (
     CompilationConfig,
     CompilationResult,
@@ -46,8 +47,9 @@ class ArtifactFormatter:
     ) -> CompilationResult:
         """Render an artifact and compute statistics from its final allocation.
 
-        Selected fidelities may be lowered to fit format overhead. Signature
-        coverage is estimated from final tiers, not measured by reparsing output.
+        Selected fidelities may be lowered to fit format overhead, and trimmed
+        files may take back leftover tokens. Signature coverage is estimated from
+        final tiers, not measured by reparsing output.
         """
         root = Path(root_path).resolve()
         content, tree = self._render_within_budget(root.name, files)
@@ -87,46 +89,192 @@ class ArtifactFormatter:
         )
         return CompilationResult(str(root), self.config.output_format, content, stats, files)
 
+    _MAX_REFILL_RENDERS = 8
+
     def _render_within_budget(self, name: str, files: list[FileAnalysis]) -> tuple[str, str]:
         """Return content and tree, minimizing utility lost per needed token.
 
         Each iteration recounts the entire artifact because wrapper and escaping
         costs differ by format. Tree-only output falls back to a minimal document.
+        Once the artifact fits, trimmed files take back leftover tokens.
         """
         optimizer = TokenBudgetOptimizer(self.config)
+        wrapper_tokens: int | None = None
+        refilled = False
+        trimmed_from: dict[str, FidelityLevel] = {}
         while True:
             tree = self.render_budgeted_directory_tree(files, name)
             content = self._render(name, files, tree)
             overflow_tokens = self.token_counter.count(content) - self.config.budget_tokens
             if overflow_tokens <= 0:
+                if trimmed_from and not refilled and wrapper_tokens is not None:
+                    refilled = True
+                    used_tokens = overflow_tokens + self.config.budget_tokens
+                    if self._refill_trimmed(
+                        name, files, trimmed_from, optimizer, wrapper_tokens, used_tokens
+                    ):
+                        continue
                 return content, tree
 
             active = [file for file in files if file.selected_fidelity > FidelityLevel.TREE]
             if not active:
                 return self._minimal(name, files), tree
+            if wrapper_tokens is None:
+                wrapper_tokens = self._file_wrapper_tokens(name, tree)
+            steps = self._utility_trim_order(active, overflow_tokens, optimizer, wrapper_tokens)
+            if not steps:
+                return self._minimal(name, files), tree
+            self._apply_trim(steps, overflow_tokens, trimmed_from)
 
-            downgrades: list[tuple[float, str, FidelityLevel, FileAnalysis]] = []
-            for file in active:
-                current_value = optimizer.tier_utility(file, file.selected_fidelity)
-                for level in FidelityLevel:
-                    if level >= file.selected_fidelity:
-                        continue
-                    saved_tokens = file.selected_tokens - file.tiers[level].tokens
-                    if level == FidelityLevel.TREE:
-                        saved_tokens += TokenBudgetOptimizer.FILE_WRAPPER_OVERHEAD_TOKENS
-                    if saved_tokens <= 0:
-                        continue
-                    loss = current_value - optimizer.tier_utility(file, level)
-                    downgrades.append(
-                        (
-                            loss / min(saved_tokens, overflow_tokens),
-                            file.rel_path,
-                            level,
-                            file,
-                        )
-                    )
-            _, _, level, file = min(downgrades, key=lambda item: item[:3])
+    @staticmethod
+    def _apply_trim(
+        steps: list[tuple[FileAnalysis, FidelityLevel, int]],
+        overflow_tokens: int,
+        trimmed_from: dict[str, FidelityLevel],
+    ) -> None:
+        # Re-rendering after every downgrade makes large overflows quadratic, so apply
+        # a prefix of the trim order while the estimated savings stay within half the
+        # overflow. The margin absorbs estimates that undercount escaping by up to 2x;
+        # a small overflow is still trimmed one downgrade at a time.
+        saved = 0
+        for index, (file, level, saved_tokens) in enumerate(steps):
+            if index and 2 * (saved + saved_tokens) > overflow_tokens:
+                break
+            trimmed_from.setdefault(file.rel_path, file.selected_fidelity)
             file.selected_fidelity = level
+            saved += saved_tokens
+
+    def _refill_trimmed(
+        self,
+        name: str,
+        files: list[FileAnalysis],
+        trimmed_from: dict[str, FidelityLevel],
+        optimizer: TokenBudgetOptimizer,
+        wrapper_tokens: int,
+        used_tokens: int,
+    ) -> bool:
+        """Give leftover tokens back to trimmed files, best utility per token first.
+
+        Whole-file tiers make the last trim overshoot, sometimes by hundreds of
+        tokens. Each batch is checked against the real artifact and undone if it
+        overflows; a failed single step stops that file, and two in a row (when
+        escaping makes every estimate too low) stop the pass.
+        """
+        by_path = {file.rel_path: file for file in files}
+        open_paths = dict(trimmed_from)
+        changed = False
+        single = False
+        failures = 0
+        for _ in range(self._MAX_REFILL_RENDERS):
+            slack = self.config.budget_tokens - used_tokens
+            candidates: list[tuple[float, str, FidelityLevel, int]] = []
+            for path, ceiling in open_paths.items():
+                file = by_path[path]
+                if file.selected_fidelity >= ceiling:
+                    continue
+                level = FidelityLevel(file.selected_fidelity + 1)
+                cost = file.tiers[level].tokens - file.selected_tokens
+                if file.selected_fidelity == FidelityLevel.TREE:
+                    cost += wrapper_tokens
+                if cost > slack:
+                    continue
+                gain = optimizer.tier_utility(file, level) - optimizer.tier_utility(
+                    file, file.selected_fidelity
+                )
+                candidates.append((-gain / max(cost, 1), path, level, max(cost, 0)))
+            if not candidates:
+                return changed
+            candidates.sort()
+            batch: list[tuple[FileAnalysis, FidelityLevel]] = []
+            spent = 0
+            for _, path, level, cost in candidates:
+                if batch and (single or 2 * (spent + cost) > slack):
+                    break
+                file = by_path[path]
+                batch.append((file, file.selected_fidelity))
+                file.selected_fidelity = level
+                spent += cost
+            tree = self.render_budgeted_directory_tree(files, name)
+            count = self.token_counter.count(self._render(name, files, tree))
+            if count <= self.config.budget_tokens:
+                used_tokens = count
+                changed = True
+                single = False
+                failures = 0
+                continue
+            for file, fidelity in batch:
+                file.selected_fidelity = fidelity
+            if len(batch) == 1:
+                del open_paths[batch[0][0].rel_path]
+                failures += 1
+                if failures == 2:
+                    return changed
+            single = True
+        return changed
+
+    @staticmethod
+    def _utility_trim_order(
+        files: list[FileAnalysis],
+        overflow_tokens: int,
+        optimizer: TokenBudgetOptimizer,
+        wrapper_tokens: int,
+    ) -> list[tuple[FileAnalysis, FidelityLevel, int]]:
+        """Downgrades by utility lost per token, up to the first file seen twice.
+
+        A file's next step depends on the tier its first step leaves it at, so the
+        order is only known up to that point.
+        """
+        candidates: list[tuple[float, str, FidelityLevel, FileAnalysis, int]] = []
+        for file in files:
+            current_value = optimizer.tier_utility(file, file.selected_fidelity)
+            for level in FidelityLevel:
+                if level >= file.selected_fidelity:
+                    continue
+                saved_tokens = file.selected_tokens - file.tiers[level].tokens
+                if level == FidelityLevel.TREE:
+                    saved_tokens += wrapper_tokens
+                if saved_tokens <= 0:
+                    continue
+                loss = current_value - optimizer.tier_utility(file, level)
+                candidates.append(
+                    (
+                        loss / min(saved_tokens, overflow_tokens),
+                        file.rel_path,
+                        level,
+                        file,
+                        saved_tokens,
+                    )
+                )
+        candidates.sort(key=lambda item: item[:3])
+        order: list[tuple[FileAnalysis, FidelityLevel, int]] = []
+        seen: set[str] = set()
+        for _, path, level, file, saved_tokens in candidates:
+            if path in seen:
+                break
+            seen.add(path)
+            order.append((file, level, saved_tokens))
+        return order
+
+    def _file_wrapper_tokens(self, name: str, tree: str) -> int:
+        """Measure what one more file's entry costs in this format beyond its content."""
+        content = "x"
+
+        def sample(path: str) -> FileAnalysis:
+            return FileAnalysis(
+                rel_path=path,
+                abs_path="",
+                language="python",
+                size_bytes=len(content),
+                parsed=ParsedAst(source=content.encode()),
+                tiers={level: RenderedTier(content, 1) for level in FidelityLevel},
+                pagerank_score=0.012345678901234567,
+                selected_fidelity=FidelityLevel.FULL,
+            )
+
+        first, second = sample("src/package/module.py"), sample("src/package/other.py")
+        one = self.token_counter.count(self._render(name, [first], tree))
+        two = self.token_counter.count(self._render(name, [first, second], tree))
+        return max(two - one - 1, 1)
 
     def _render(self, name: str, files: list[FileAnalysis], tree: str) -> str:
         ranked = sorted(files, key=lambda file: (-file.pagerank_score, file.rel_path))
