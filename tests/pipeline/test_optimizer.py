@@ -335,3 +335,66 @@ def test_central_module_survives_tiny_config_files_in_every_format(
 
     assert result.stats.compressed_tokens <= 2000
     assert fidelity["app/core.py"] >= FidelityLevel.SIGNATURES
+
+
+def _allocate_with_pins(
+    files: list[FileAnalysis], budget: int, pins: list[str]
+) -> list[FileAnalysis]:
+    config = CompilationConfig(budget_tokens=budget, pinned_full_files=pins)
+    TokenBudgetOptimizer(config).optimize(files, tree_overhead_tokens=0)
+    return files
+
+
+def test_pinned_file_is_kept_full_and_the_rest_share_the_remainder() -> None:
+    god = _tiered_file("legacy/god.py", 0.25, 800, 3000, 12000)
+    modules = [_tiered_file(f"m{index}.py", 0.025, 40, 120, 300) for index in range(30)]
+
+    files = _allocate_with_pins([god, *modules], 16000, ["legacy/"])
+
+    assert god.selected_fidelity == FidelityLevel.FULL
+    assert all(module.selected_fidelity >= FidelityLevel.SIGNATURES for module in modules)
+    assert (
+        sum(TokenBudgetOptimizer._effective_tier_cost(f, f.selected_fidelity) for f in files)
+        <= 16000
+    )
+
+
+def test_pinned_files_are_raised_tier_by_tier_in_rank_order() -> None:
+    def repository() -> list[FileAnalysis]:
+        return [
+            _tiered_file("low.py", 0.01, 100, 400, 900),
+            _tiered_file("high.py", 0.02, 100, 400, 900),
+            _tiered_file("hub.py", 0.9, 100, 500, 1000),
+        ]
+
+    # 1400 tokens fund both pins' signatures and skeletons but only one full source.
+    low, high, hub = _allocate_with_pins(repository(), 1400, ["low.py", "high.py"])
+    unpinned = {file.rel_path: file.selected_fidelity for file in _allocate(repository(), 1400)}
+
+    assert high.selected_fidelity == FidelityLevel.FULL
+    assert low.selected_fidelity == FidelityLevel.SKELETON
+    assert hub.selected_fidelity == FidelityLevel.TREE
+    # Without pins the central hub would take the budget instead.
+    assert unpinned["hub.py"] == FidelityLevel.FULL
+    assert unpinned["high.py"] < FidelityLevel.FULL
+
+
+def test_no_pinned_file_is_dropped_while_another_pin_is_above_signatures() -> None:
+    big = _tiered_file("big.py", 0.5, 300, 3000, 9000)
+    small = _tiered_file("small.py", 0.1, 200, 400, 800)
+
+    # Raising big.py to SKEL first would leave small.py out entirely.
+    _allocate_with_pins([big, small], 3100, ["big.py", "small.py"])
+
+    assert big.selected_fidelity == FidelityLevel.SIGNATURES
+    assert small.selected_fidelity == FidelityLevel.FULL
+
+
+def test_pinned_files_are_honoured_even_against_the_objective() -> None:
+    peripheral = _tiered_file("peripheral.py", 0.001, 100, 200, 1000)
+    hub = _tiered_file("hub.py", 0.5, 300, 600, 1000)
+
+    _allocate_with_pins([peripheral, hub], 1100, ["peripheral.py"])
+
+    assert peripheral.selected_fidelity == FidelityLevel.FULL
+    assert hub.selected_fidelity == FidelityLevel.TREE

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from contextcraft.elider import FidelityLevel
 from contextcraft.models import CompilationConfig, FileAnalysis
+from contextcraft.utils import matches_path_patterns
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +65,9 @@ class TokenBudgetOptimizer:
 
         Tree overhead includes document framing. If it exhausts the budget,
         all files remain TREE and the formatter handles the remaining overflow.
+        Files matching ``pinned_full_files`` are fixed first: all get SIGS, then
+        SKEL, then FULL, highest PageRank first at each step, as far as the budget
+        allows. The remaining files share what is left.
         """
         budget = self.config.budget_tokens
         if not files:
@@ -93,9 +97,18 @@ class TokenBudgetOptimizer:
                     file.selected_fidelity = FidelityLevel.FULL
                 used_tokens = total_full_cost
             else:
-                used_tokens = self._greedy_marginal_allocation(files, net_budget)
-                used_tokens = self._local_search_refinement(files, used_tokens, net_budget)
-                used_tokens = self._greedy_marginal_allocation(files, net_budget, used_tokens)
+                pinned = [
+                    file
+                    for file in files
+                    if matches_path_patterns(file.rel_path, self.config.pinned_full_files)
+                ]
+                used_tokens = self._pin_files(pinned, net_budget)
+                # Pinned tiers are final; the solver only sees the remaining files.
+                pinned_ids = {id(file) for file in pinned}
+                free = [file for file in files if id(file) not in pinned_ids]
+                used_tokens = self._greedy_marginal_allocation(free, net_budget, used_tokens)
+                used_tokens = self._local_search_refinement(free, used_tokens, net_budget)
+                used_tokens = self._greedy_marginal_allocation(free, net_budget, used_tokens)
 
         return BudgetAllocationSummary(
             budget_tokens=budget,
@@ -105,6 +118,27 @@ class TokenBudgetOptimizer:
             total_estimated_tokens=estimated_tree_overhead + used_tokens,
             objective_score=self._compute_total_objective(files),
         )
+
+    @classmethod
+    def _pin_files(cls, pinned: list[FileAnalysis], net_budget: int) -> int:
+        """Raise pinned files tier by tier, highest PageRank first; return the tokens used.
+
+        Every pin whose signatures fit gets them before any pin gets a skeleton,
+        and so on up to FULL, so a pin's signatures are never given up for another
+        pin's richer tier. A pin whose next tier does not fit is skipped, and
+        smaller pins may still be raised past it.
+        """
+        ranked = sorted(pinned, key=lambda item: (-item.pagerank_score, item.rel_path))
+        used_tokens = 0
+        for level in cls._ORDERED_TIERS[1:]:
+            for file in ranked:
+                delta = cls._effective_tier_cost(file, level) - cls._effective_tier_cost(
+                    file, file.selected_fidelity
+                )
+                if used_tokens + delta <= net_budget:
+                    file.selected_fidelity = level
+                    used_tokens += delta
+        return used_tokens
 
     @classmethod
     def estimate_tree_overhead(cls, num_files: int) -> int:

@@ -153,7 +153,11 @@ When applying `ContextCraft` to large, long-lived enterprise repositories:
    ```bash
    contextcraft . --include "contextcraft/languages/**" --focus-file "contextcraft/languages/structural.py" --budget 12k
    ```
-3. **100% Offline Local LLM Workflows:** While `SecretSanitizer` automatically scrubs API keys, PEM blocks, and high-entropy secrets, proprietary business logic should never be sent to unapproved public cloud APIs. Pair `ContextCraft`'s `--budget 8k` or `16k` output directly with local models (`Qwen-2.5-Coder`, `Llama-3.3`, `DeepSeek`) running on internal GPUs via Ollama, vLLM, or `llama.cpp`.
+3. **Pin What You Are Debugging:** When a legacy file must be seen verbatim, `--pin-full` (repeatable; the same gitignore-style patterns as `--include`) keeps it at `FULL` and lets the solver budget the rest around it:
+   ```bash
+   contextcraft . --pin-full "src/billing/legacy_invoice.py" --focus "invoice rounding" --budget 16k
+   ```
+4. **100% Offline Local LLM Workflows:** While `SecretSanitizer` automatically scrubs API keys, PEM blocks, and high-entropy secrets, proprietary business logic should never be sent to unapproved public cloud APIs. Pair `ContextCraft`'s `--budget 8k` or `16k` output directly with local models (`Qwen-2.5-Coder`, `Llama-3.3`, `DeepSeek`) running on internal GPUs via Ollama, vLLM, or `llama.cpp`.
 
 ---
 

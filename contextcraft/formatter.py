@@ -18,6 +18,7 @@ from contextcraft.models import (
     OutputFormat,
 )
 from contextcraft.optimizer import TokenBudgetOptimizer
+from contextcraft.utils import matches_path_patterns
 
 
 class ArtifactFormatter:
@@ -47,9 +48,9 @@ class ArtifactFormatter:
     ) -> CompilationResult:
         """Render an artifact and compute statistics from its final allocation.
 
-        Selected fidelities may be lowered to fit format overhead, and trimmed
-        files may take back leftover tokens. Signature coverage is estimated from
-        final tiers, not measured by reparsing output.
+        Selected fidelities may be lowered to fit format overhead; if pinned files
+        have to be lowered, the other files are re-allocated around them. Signature
+        coverage is estimated from final tiers, not measured by reparsing output.
         """
         root = Path(root_path).resolve()
         content, tree = self._render_within_budget(root.name, files)
@@ -89,6 +90,8 @@ class ArtifactFormatter:
         )
         return CompilationResult(str(root), self.config.output_format, content, stats, files)
 
+    _MAX_PIN_REFILLS = 3
+    _MAX_PIN_RAISES = 48
     _MAX_REFILL_RENDERS = 8
 
     def _render_within_budget(self, name: str, files: list[FileAnalysis]) -> tuple[str, str]:
@@ -96,24 +99,84 @@ class ArtifactFormatter:
 
         Each iteration recounts the entire artifact because wrapper and escaping
         costs differ by format. Tree-only output falls back to a minimal document.
-        Once the artifact fits, trimmed files take back leftover tokens.
+        Pinned files give way only once every other file is down to TREE, in the
+        reverse of the order the optimizer raised them. If that happens, their
+        estimated cost was too low for this format, so the files are re-allocated
+        under a budget scaled by the measured cost ratio, keeping whichever fitting
+        allocation serves the pins better. Finally, pinned files are raised in
+        measured steps to richer tiers that fit the real artifact, making room by
+        trimming only unpinned files, and trimmed files take back leftover tokens.
         """
         optimizer = TokenBudgetOptimizer(self.config)
+        pinned = {
+            file.rel_path
+            for file in files
+            if matches_path_patterns(file.rel_path, self.config.pinned_full_files)
+        }
         wrapper_tokens: int | None = None
-        refilled = False
+        cost_ratio: float | None = None
+        refills = 0
+        finalized = False
         trimmed_from: dict[str, FidelityLevel] = {}
+        # The best fitting state seen before a re-allocation, to be finished and compared.
+        pending: tuple[tuple[tuple[int, ...], float], list[FidelityLevel]] | None = None
+        best: tuple[tuple[tuple[int, ...], float], str, str, list[FidelityLevel]] | None = None
         while True:
             tree = self.render_budgeted_directory_tree(files, name)
             content = self._render(name, files, tree)
             overflow_tokens = self.token_counter.count(content) - self.config.budget_tokens
             if overflow_tokens <= 0:
-                if trimmed_from and not refilled and wrapper_tokens is not None:
-                    refilled = True
+                if cost_ratio is not None and refills < self._MAX_PIN_REFILLS:
+                    # Re-allocate with pins first again, under a budget shrunk by how much
+                    # this format's real cost exceeded the estimate.
+                    refills += 1
+                    key = self._pin_priority_key(files, pinned, optimizer)
+                    if pending is None or key > pending[0]:
+                        pending = (key, [file.selected_fidelity for file in files])
+                    budget = max(1, int(self.config.budget_tokens / cost_ratio))
+                    cost_ratio = None
+                    TokenBudgetOptimizer(
+                        self.config.model_copy(update={"budget_tokens": budget})
+                    ).optimize(files, self._estimated_overhead(tree))
+                    trimmed_from.clear()
+                    continue
+                if not finalized and (pinned or trimmed_from):
+                    finalized = True
+                    if wrapper_tokens is None:
+                        wrapper_tokens = self._file_wrapper_tokens(name, tree)
                     used_tokens = overflow_tokens + self.config.budget_tokens
+                    changed = False
+                    if pinned:
+                        changed, used_tokens = self._raise_pins(
+                            name,
+                            files,
+                            pinned,
+                            optimizer,
+                            wrapper_tokens,
+                            used_tokens,
+                            trimmed_from,
+                        )
                     if self._refill_trimmed(
                         name, files, trimmed_from, optimizer, wrapper_tokens, used_tokens
                     ):
+                        changed = True
+                    if changed:
                         continue
+                key = self._pin_priority_key(files, pinned, optimizer)
+                if pending is not None:
+                    # A re-allocation can come out worse than the fitting state it replaced:
+                    # finish that state the same way, then keep whichever serves pins better.
+                    best = (key, content, tree, [file.selected_fidelity for file in files])
+                    for file, level in zip(files, pending[1], strict=True):
+                        file.selected_fidelity = level
+                    pending = None
+                    finalized = False
+                    trimmed_from.clear()
+                    continue
+                if best is not None and best[0] > key:
+                    for file, level in zip(files, best[3], strict=True):
+                        file.selected_fidelity = level
+                    return best[1], best[2]
                 return content, tree
 
             active = [file for file in files if file.selected_fidelity > FidelityLevel.TREE]
@@ -121,15 +184,26 @@ class ArtifactFormatter:
                 return self._minimal(name, files), tree
             if wrapper_tokens is None:
                 wrapper_tokens = self._file_wrapper_tokens(name, tree)
-            steps = self._utility_trim_order(active, overflow_tokens, optimizer, wrapper_tokens)
+            unpinned = [file for file in active if file.rel_path not in pinned]
+            if not unpinned and cost_ratio is None:
+                estimate = self._estimated_overhead(tree) + sum(
+                    optimizer._effective_tier_cost(file, file.selected_fidelity) for file in active
+                )
+                cost_ratio = max(1.0, (overflow_tokens + self.config.budget_tokens) / estimate)
+            steps = (
+                self._utility_trim_order(unpinned, overflow_tokens, optimizer, wrapper_tokens)
+                if unpinned
+                else self._pin_trim_order(active, wrapper_tokens)
+            )
             if not steps:
                 return self._minimal(name, files), tree
-            self._apply_trim(steps, overflow_tokens, trimmed_from)
+            self._apply_trim(steps, overflow_tokens, pinned, trimmed_from)
 
     @staticmethod
     def _apply_trim(
         steps: list[tuple[FileAnalysis, FidelityLevel, int]],
         overflow_tokens: int,
+        pinned: set[str],
         trimmed_from: dict[str, FidelityLevel],
     ) -> None:
         # Re-rendering after every downgrade makes large overflows quadratic, so apply
@@ -140,9 +214,115 @@ class ArtifactFormatter:
         for index, (file, level, saved_tokens) in enumerate(steps):
             if index and 2 * (saved + saved_tokens) > overflow_tokens:
                 break
-            trimmed_from.setdefault(file.rel_path, file.selected_fidelity)
+            if file.rel_path not in pinned:
+                trimmed_from.setdefault(file.rel_path, file.selected_fidelity)
             file.selected_fidelity = level
             saved += saved_tokens
+
+    def _raise_pins(
+        self,
+        name: str,
+        files: list[FileAnalysis],
+        pinned: set[str],
+        optimizer: TokenBudgetOptimizer,
+        wrapper_tokens: int,
+        used_tokens: int,
+        trimmed_from: dict[str, FidelityLevel],
+    ) -> tuple[bool, int]:
+        """Raise pins tier by tier while the real artifact fits; report any change.
+
+        Allocation works on estimates, so a pin can end a tier lower than the real
+        output allows. Pins are raised in batches, rank order within each tier;
+        each batch makes room by trimming unpinned files only and is undone if that
+        is not enough. A failed single pin is skipped, and two in a row end the tier.
+        """
+        ranked = sorted(
+            (file for file in files if file.rel_path in pinned),
+            key=lambda item: (-item.pagerank_score, item.rel_path),
+        )
+        changed = False
+        attempts = 0
+        blocked: set[str] = set()
+        for level in (FidelityLevel.SIGNATURES, FidelityLevel.SKELETON, FidelityLevel.FULL):
+            single = False
+            failures = 0
+            while attempts < self._MAX_PIN_RAISES:
+                room = self.config.budget_tokens - used_tokens
+                room += sum(
+                    file.selected_tokens + wrapper_tokens
+                    for file in files
+                    if file.selected_fidelity > FidelityLevel.TREE and file.rel_path not in pinned
+                )
+                batch: list[FileAnalysis] = []
+                spent = 0
+                for pin in ranked:
+                    if pin.rel_path in blocked or pin.selected_fidelity >= level:
+                        continue
+                    extra = pin.tiers[level].tokens - pin.selected_tokens
+                    if pin.selected_fidelity == FidelityLevel.TREE:
+                        extra += wrapper_tokens
+                    # Estimates are inexact (escaping, merged tokens), so near misses are
+                    # measured rather than skipped.
+                    if extra > room + wrapper_tokens:
+                        blocked.add(pin.rel_path)
+                        continue
+                    if batch and (single or 2 * (spent + extra) > room):
+                        break
+                    batch.append(pin)
+                    spent += extra
+                if not batch:
+                    break
+                attempts += 1
+                before = [(file, file.selected_fidelity) for file in files]
+                trimmed_before = dict(trimmed_from)
+                for pin in batch:
+                    pin.selected_fidelity = level
+                count = self._fit_by_trimming_unpinned(
+                    name, files, pinned, optimizer, wrapper_tokens, trimmed_from
+                )
+                if count is not None:
+                    used_tokens = count
+                    changed = True
+                    single = False
+                    failures = 0
+                    continue
+                for file, fidelity in before:
+                    file.selected_fidelity = fidelity
+                trimmed_from.clear()
+                trimmed_from.update(trimmed_before)
+                if len(batch) == 1:
+                    blocked.add(batch[0].rel_path)
+                    failures += 1
+                    if failures == 2:
+                        break
+                single = True
+        return changed, used_tokens
+
+    def _fit_by_trimming_unpinned(
+        self,
+        name: str,
+        files: list[FileAnalysis],
+        pinned: set[str],
+        optimizer: TokenBudgetOptimizer,
+        wrapper_tokens: int,
+        trimmed_from: dict[str, FidelityLevel],
+    ) -> int | None:
+        """Trim unpinned files until the artifact fits; return its size, or None."""
+        while True:
+            tree = self.render_budgeted_directory_tree(files, name)
+            count = self.token_counter.count(self._render(name, files, tree))
+            overflow_tokens = count - self.config.budget_tokens
+            if overflow_tokens <= 0:
+                return count
+            unpinned = [
+                file
+                for file in files
+                if file.selected_fidelity > FidelityLevel.TREE and file.rel_path not in pinned
+            ]
+            steps = self._utility_trim_order(unpinned, overflow_tokens, optimizer, wrapper_tokens)
+            if not steps:
+                return None
+            self._apply_trim(steps, overflow_tokens, pinned, trimmed_from)
 
     def _refill_trimmed(
         self,
@@ -213,6 +393,19 @@ class ArtifactFormatter:
         return changed
 
     @staticmethod
+    def _pin_priority_key(
+        files: list[FileAnalysis], pinned: set[str], optimizer: TokenBudgetOptimizer
+    ) -> tuple[tuple[int, ...], float]:
+        """Order allocations by pins kept at each tier, then by total utility."""
+        pins = [file.selected_fidelity for file in files if file.rel_path in pinned]
+        coverage = tuple(sum(level >= tier for level in pins) for tier in list(FidelityLevel)[1:])
+        utility = sum(optimizer.tier_utility(file, file.selected_fidelity) for file in files)
+        return coverage, utility
+
+    def _estimated_overhead(self, tree: str) -> int:
+        return TokenBudgetOptimizer.BASE_DOCUMENT_OVERHEAD_TOKENS + self.token_counter.count(tree)
+
+    @staticmethod
     def _utility_trim_order(
         files: list[FileAnalysis],
         overflow_tokens: int,
@@ -253,6 +446,27 @@ class ArtifactFormatter:
                 break
             seen.add(path)
             order.append((file, level, saved_tokens))
+        return order
+
+    @staticmethod
+    def _pin_trim_order(
+        pinned: list[FileAnalysis], wrapper_tokens: int
+    ) -> list[tuple[FileAnalysis, FidelityLevel, int]]:
+        """Undo the optimizer's pin allocation: FULL steps first, lowest PageRank first."""
+        ranked = sorted(pinned, key=lambda item: (item.pagerank_score, item.rel_path))
+        tiers = {file.rel_path: file.selected_fidelity for file in ranked}
+        order: list[tuple[FileAnalysis, FidelityLevel, int]] = []
+        for level in (FidelityLevel.SKELETON, FidelityLevel.SIGNATURES, FidelityLevel.TREE):
+            for file in ranked:
+                current = tiers[file.rel_path]
+                if current <= level:
+                    continue
+                tiers[file.rel_path] = level
+                saved_tokens = file.tiers[current].tokens - file.tiers[level].tokens
+                if level == FidelityLevel.TREE:
+                    saved_tokens += wrapper_tokens
+                if saved_tokens > 0:
+                    order.append((file, level, saved_tokens))
         return order
 
     def _file_wrapper_tokens(self, name: str, tree: str) -> int:

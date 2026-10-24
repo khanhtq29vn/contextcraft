@@ -9,6 +9,7 @@ from typing import Annotated
 import typer
 from rich import box
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -16,6 +17,7 @@ from contextcraft import __version__
 from contextcraft.core import ContextCraft
 from contextcraft.elider import FidelityLevel
 from contextcraft.models import CompilationResult, ContextCraftError, OutputFormat
+from contextcraft.utils import matches_path_patterns
 
 app = typer.Typer(
     name="contextcraft",
@@ -72,6 +74,13 @@ def main(
         typer.Option(
             "--focus-file",
             help="Specific relative file path or glob to boost in PageRank (repeatable).",
+        ),
+    ] = None,
+    pin_full: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--pin-full",
+            help="File path, glob, or directory kept at FULL fidelity before the rest of the budget is allocated (repeatable).",
         ),
     ] = None,
     output_format: Annotated[
@@ -144,6 +153,7 @@ def main(
             budget_tokens=budget,
             focus_query=focus,
             focus_files=list(focus_file) if focus_file else [],
+            pinned_full_files=list(pin_full) if pin_full else [],
             output_format=output_format,
             include_patterns=list(include) if include else [],
             exclude_patterns=exclude_list,
@@ -166,12 +176,35 @@ def main(
         if not result.content.endswith("\n"):
             sys.stdout.write("\n")
         sys.stdout.flush()
+    if pin_full:
+        _warn_about_pins(result, list(pin_full))
     copied_ok = False
     if copy:
         copied_ok = _copy_to_clipboard(result.content)
     if not quiet:
         _render_telemetry_summary(
             result=result, output_path=output, copied_to_clipboard=copied_ok, copy_requested=copy
+        )
+
+
+def _warn_about_pins(result: CompilationResult, patterns: list[str]) -> None:
+    for pattern in patterns:
+        if pattern.startswith("!"):
+            continue
+        if not any(matches_path_patterns(file.rel_path, [pattern]) for file in result.files):
+            _error_console.print(
+                f"[yellow]Warning:[/yellow] --pin-full {escape(repr(pattern))} matched no files."
+            )
+    short = [
+        file.rel_path
+        for file in result.files
+        if file.selected_fidelity < FidelityLevel.FULL
+        and matches_path_patterns(file.rel_path, patterns)
+    ]
+    if short:
+        _error_console.print(
+            f"[yellow]Warning:[/yellow] {len(short)} pinned file(s) did not fit the budget at FULL: "
+            + escape(", ".join(short))
         )
 
 
