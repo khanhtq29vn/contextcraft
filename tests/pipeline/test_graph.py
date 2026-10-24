@@ -238,3 +238,38 @@ def test_graph_resolves_declared_modules_and_zig_relative_imports(
     graph = DependencyGraphScorer().build_dependency_graph(analyses)
 
     assert graph.has_edge(source, target)
+
+
+@pytest.mark.parametrize(
+    ("pattern", "rel_path"),
+    [
+        ("a.py", "data.py"),
+        ("core.py", "contextcraft/hardcore.py"),
+        (".env", "src/environment.py"),
+        ("api", "docs/rapid_notes.md"),
+        ("src/auth", "src/authentication/jwt.py"),
+        ("Models.py", "app/models.py"),
+    ],
+)
+def test_focus_files_do_not_match_substrings(pattern: str, rel_path: str) -> None:
+    assert not DependencyGraphScorer._matches_focus_files(rel_path, [pattern])
+
+
+@pytest.mark.parametrize(
+    ("pattern", "rel_path"),
+    [
+        ("src/auth/jwt.py", "src/auth/jwt.py"),
+        ("./src/auth/jwt.py", "src/auth/jwt.py"),
+        ("/src/auth/jwt.py", "src/auth/jwt.py"),
+        ("jwt.py", "src/auth/jwt.py"),
+        (".env", ".env"),
+        (".github/workflows/ci.yml", ".github/workflows/ci.yml"),
+        ("src/auth", "src/auth/jwt.py"),
+        ("src/auth/", "src/auth/jwt.py"),
+        ("src/**/*.py", "src/auth/jwt.py"),
+        ("*.py", "src/auth/jwt.py"),
+        ("src\\auth\\jwt.py", "src/auth/jwt.py"),
+    ],
+)
+def test_focus_files_match_paths_names_globs_and_directories(pattern: str, rel_path: str) -> None:
+    assert DependencyGraphScorer._matches_focus_files(rel_path, [pattern])
