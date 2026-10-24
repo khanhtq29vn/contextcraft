@@ -124,7 +124,7 @@ CONTEXTCRAFT_WEB_ROOT="$HOME/repositories" uv run uvicorn web.app:app --host 127
 
 ---
 
-## Reproducible Benchmark (`ContextCraft v0.3.0` Repository — `258` Files, `119,813` Raw Tokens)
+## Reproducible Benchmark (`ContextCraft v0.3.1` Repository — `258` Files, `138,468` Raw Tokens)
 
 Reproduce these exact telemetry numbers on the repository root:
 
@@ -136,11 +136,11 @@ uv run python benchmarks/run_benchmark.py . --budgets 4000,6000,8000,12000,16000
 
 | Target Budget (`B`)             | Emitted Tokens | Budget Utilization | Compression Ratio | Tokens Saved | Fidelity Allocation (`FULL / SKEL / SIGS / TREE`)                              |
 | :------------------------------ | -------------: | -----------------: | ----------------: | -----------: | :----------------------------------------------------------------------------- |
-| **Uncompressed (`repomix`)**    |      `119,813` |   Overflow (`15x`) |           `1.00x` |       `0.0%` | `258 FULL`                                                                     |
-| **ContextCraft `--budget 4k`**  |        `3,971` |            `99.3%` |      **`30.17x`** |  **`96.7%`** | `FULL + SKEL + SIGS + Budgeted Tree`                                           |
-| **ContextCraft `--budget 8k`**  |        `7,991` |            `99.9%` |      **`14.99x`** |  **`93.3%`** | `5 FULL \| 15 SKEL \| 9 SIGS \| 229 TREE`                                      |
-| **ContextCraft `--budget 12k`** |       `11,991` |            `99.9%` |       **`9.99x`** |  **`90.0%`** | `10 FULL \| 20 SKEL \| 10 SIGS \| 218 TREE`                                    |
-| **ContextCraft `--budget 16k`** |       `15,980` |            `99.9%` |       **`7.50x`** |  **`86.7%`** | Core Symbol Retention (`37.4%`) & API Coverage (`29.6%`) beat Naive Truncation |
+| **Uncompressed (`repomix`)**    |      `138,468` |   Overflow (`17x`) |           `1.00x` |       `0.0%` | `258 FULL`                                                                     |
+| **ContextCraft `--budget 4k`**  |        `3,966` |            `99.2%` |      **`34.91x`** |  **`97.1%`** | `0 FULL \| 5 SKEL \| 10 SIGS \| 243 TREE`                                      |
+| **ContextCraft `--budget 8k`**  |        `7,985` |            `99.8%` |      **`17.34x`** |  **`94.2%`** | `0 FULL \| 19 SKEL \| 10 SIGS \| 229 TREE`                                     |
+| **ContextCraft `--budget 12k`** |       `11,990` |            `99.9%` |      **`11.55x`** |  **`91.3%`** | `2 FULL \| 24 SKEL \| 11 SIGS \| 221 TREE`                                     |
+| **ContextCraft `--budget 16k`** |       `15,967` |            `99.8%` |       **`8.67x`** |  **`88.5%`** | Core Symbol Retention (`44.2%`) & API Coverage (`33.0%`) beat Naive Truncation |
 
 ---
 
