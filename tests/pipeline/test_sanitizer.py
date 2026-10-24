@@ -176,3 +176,128 @@ def test_sanitizer_is_idempotent_and_preserves_quoted_code() -> None:
     assert first.sanitized_content == second.sanitized_content
     assert not second.redacted_secrets
     assert not get_parser("javascript").parse(first.sanitized_content.encode()).root_node.has_error
+
+
+_LONG_SECRET = "Zm9vYmFyYmF6cXV4" * 12  # 192 characters, longer than any old length cap
+_JWT = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+)
+
+
+@pytest.mark.parametrize(
+    ("file_path", "source", "secret", "kind"),
+    [
+        (
+            "config.py",
+            f'client_secret = "{_LONG_SECRET}"\n',
+            _LONG_SECRET,
+            SecretKind.GENERIC_HIGH_ENTROPY,
+        ),
+        ("config.py", f'TOKEN = "{_JWT}"\n', _JWT, SecretKind.JWT),
+        ("app.js", f"fetch(url, {{ jwt: '{_JWT}' }});\n", _JWT, SecretKind.JWT),
+        (
+            "client.py",
+            'headers = {"Authorization": "Bearer R7nY9u2K5v8X4q6ZR7nY9u2K"}\n',
+            "R7nY9u2K5v8X4q6ZR7nY9u2K",
+            SecretKind.BEARER_TOKEN,
+        ),
+        (
+            "settings.py",
+            'DB = "postgres://admin:Sup3rS3cret@db.internal:5432/app"\n',
+            "Sup3rS3cret",
+            SecretKind.CONNECTION_STRING_PASSWORD,
+        ),
+        (
+            "hub.py",
+            'HF = "hf_' + "a1B2" * 9 + '"\n',
+            "hf_" + "a1B2" * 9,
+            SecretKind.HUGGINGFACE_TOKEN,
+        ),
+        (
+            ".npmrc",
+            "//registry.npmjs.org/:_authToken=npm_" + "a1B2" * 9 + "\n",
+            "npm_" + "a1B2" * 9,
+            SecretKind.NPM_TOKEN,
+        ),
+        (
+            "job.py",
+            'host_token = "dapi' + "0123456789abcdef" * 2 + '"\n',
+            "dapi" + "0123456789abcdef" * 2,
+            SecretKind.DATABRICKS_TOKEN,
+        ),
+        ("settings.py", 'password = "hunter2"\n', "hunter2", SecretKind.GENERIC_HIGH_ENTROPY),
+        (".env", "DB_PASSWORD=hunter2\n", "hunter2", SecretKind.ENV_SECRET_ASSIGNMENT),
+        (
+            "config.yaml",
+            "database:\n  password: Sup3rS3cretPassw0rd # prod\n",
+            "Sup3rS3cretPassw0rd",
+            SecretKind.GENERIC_HIGH_ENTROPY,
+        ),
+        (
+            "credentials.ini",
+            "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\n",
+            "wJalrXUtnFEMI",
+            SecretKind.GENERIC_HIGH_ENTROPY,
+        ),
+    ],
+)
+def test_sanitizer_redacts_previously_leaked_secret_shapes(
+    file_path: str, source: str, secret: str, kind: SecretKind
+) -> None:
+    result = SecretSanitizer.sanitize_detailed(source, file_path)
+
+    assert secret not in result.sanitized_content
+    assert [match.kind for match in result.redacted_secrets] == [kind]
+    assert result.sanitized_content.count("\n") == source.count("\n")
+    assert SecretSanitizer.sanitize_detailed(result.sanitized_content, file_path) == (
+        result.sanitized_content,
+        [],
+    )
+
+
+@pytest.mark.parametrize(
+    ("file_path", "source"),
+    [
+        ("config.yaml", "token_url: https://auth.example.com/oauth/token\n"),
+        ("config.yaml", "password: ${DB_PASSWORD}\n"),
+        ("config.yaml", "token: ${{ secrets.DEPLOY_TOKEN }}\n"),
+        ("config.yaml", "secret_name: my-app-secret\n"),
+        ("config.yaml", "credentials:\n  - name: deploy\n"),
+        ("config.yaml", "token: |\n  multi-line\n"),
+        ("config.py", 'max_tokens = "8000"\n'),
+        ("config.py", 'tokenizer_encoding = "cl100k_base"\n'),
+        ("config.py", 'password_hash_algorithm = "bcrypt"\n'),
+        ("config.py", 'token_type = "Bearer"\n'),
+        ("config.py", 'url = "postgres://user:password@localhost/db"\n'),
+        ("config.py", 'url = "postgres://user:${DB_PASS}@localhost/db"\n'),
+        ("config.py", 'url = "https://example.com/users/a@b"\n'),
+    ],
+)
+def test_sanitizer_keeps_configuration_that_only_looks_secret(file_path: str, source: str) -> None:
+    result = SecretSanitizer.sanitize_detailed(source, file_path)
+
+    assert result.sanitized_content == source
+    assert result.redacted_secrets == []
+
+
+@pytest.mark.parametrize(
+    ("file_path", "source"),
+    [
+        (".github/workflows/ci.yml", "          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"),
+        ("config.py", 'api_key_env = "OPENAI_API_KEY"\n'),
+        ("models.py", '    GITHUB_TOKEN = "GITHUB_TOKEN"\n'),
+        (
+            "test_utils.py",
+            '("http://user:pass@complex.url.com/path?query=yes", ("user", "pass")),\n',
+        ),
+        ("test_utils.py", '"http://user:pass%20pass@complex.url.com/path?query=yes",\n'),
+        ("test_utils.py", 'f"http://{ENCODED_USER}:{ENCODED_PASSWORD}@request.com/url.html",\n'),
+        ("test_utils.py", '("hTTp://u:p@Some.Host/path", "http://some.host.proxy"),\n'),
+    ],
+)
+def test_sanitizer_ignores_references_and_url_fixtures(file_path: str, source: str) -> None:
+    result = SecretSanitizer.sanitize_detailed(source, file_path)
+
+    assert result.sanitized_content == source
+    assert result.redacted_secrets == []

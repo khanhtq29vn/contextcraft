@@ -46,11 +46,66 @@ class SecretSanitizer:
         _SecretPattern(
             SecretKind.STRIPE_KEY, re.compile("\\b(?:sk|rk)_(?:live|test)_[0-9a-zA-Z]{20,}\\b")
         ),
+        _SecretPattern(SecretKind.HUGGINGFACE_TOKEN, re.compile("\\bhf_[A-Za-z0-9]{34,}\\b")),
+        _SecretPattern(SecretKind.NPM_TOKEN, re.compile("\\bnpm_[A-Za-z0-9]{36}\\b")),
+        _SecretPattern(
+            SecretKind.DATABRICKS_TOKEN, re.compile("\\bdapi[0-9a-f]{32}(?:-[0-9]+)?\\b")
+        ),
+        _SecretPattern(
+            SecretKind.JWT,
+            re.compile("\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}"),
+        ),
+        # Patterns with a `value` group redact only that group and keep the surrounding text.
+        _SecretPattern(
+            SecretKind.BEARER_TOKEN,
+            re.compile("\\bBearer\\s+(?P<value>[A-Za-z0-9._~+/-]{16,}=*)", re.IGNORECASE),
+        ),
+        _SecretPattern(
+            SecretKind.CONNECTION_STRING_PASSWORD,
+            re.compile(
+                "\\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s:/@\"'`]+:(?P<value>[^\\s@/\"'`]+)@[^\\s@/\"'`]"
+            ),
+        ),
+    )
+    _SECRET_KEY_WORDS: ClassVar[str] = (
+        r"(?:[a-zA-Z0-9_]*?(?:api_?key|secret_?key|client_?secret|access_?token|auth_?token|"
+        r"private_?key|password|passwd|pwd|jwt_?secret|secret)[a-zA-Z0-9_]*"
+        # Bare token words must end the key so names like `max_tokens` stay untouched.
+        r"|[a-zA-Z0-9_]*?(?:token|bearer|credentials?))"
     )
     _SECRET_ASSIGNMENT_RE: ClassVar[re.Pattern[str]] = re.compile(
-        r"""(?P<prefix>(?P<key_quote>["']?)\b(?:[a-zA-Z0-9_]*?(?:api_?key|secret_?key|client_?secret|access_?token|auth_?token|private_?key|password|passwd|pwd|jwt_?secret|secret))[a-zA-Z0-9_]*(?P=key_quote)\s*[:=]\s*)(?P<quote>["'])(?P<value>[^"'\r\n]{8,128})(?P=quote)""",
+        r"""(?P<prefix>(?P<key_quote>["']?)\b(?P<key>"""
+        + _SECRET_KEY_WORDS
+        + r""")(?P=key_quote)\s*[:=]\s*)(?P<quote>["'])(?P<value>[^"'\r\n]{1,4096})(?P=quote)""",
         re.IGNORECASE,
     )
+    _UNQUOTED_ASSIGNMENT_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r"""^(?P<prefix>[ \t]*(?:-[ \t]+)?(?P<key>"""
+        + _SECRET_KEY_WORDS
+        + r""")[ \t]*[:=][ \t]*)(?P<value>[^\s"'#|>&*!{}\[\]][^\r\n]*?)(?=[ \t]+#|[ \t]*\r?$)""",
+        re.IGNORECASE,
+    )
+    _UNQUOTED_CONFIG_SUFFIXES: ClassVar[tuple[str, ...]] = (
+        ".yaml",
+        ".yml",
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".properties",
+    )
+    _PASSWORD_KEY_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r"(?:password|passwd|passphrase)$", re.IGNORECASE
+    )
+    _CREDENTIAL_FREE_URL_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s@]*"
+    )
+    # Variable references and templates: $VAR, ${VAR}, ${{ secrets.X }}, {{ x }}, {name}.
+    _REFERENCE_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r"\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})"
+        r"|\$?\{\{.*\}\}|\{[A-Za-z0-9_.]*\}"
+    )
+    # Values naming another setting, e.g. `api_key_env = "OPENAI_API_KEY"`.
+    _ENV_NAME_RE: ClassVar[re.Pattern[str]] = re.compile(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+")
     _DOTENV_LINE_RE: ClassVar[re.Pattern[str]] = re.compile(
         r"""^(?P<export>export\s+)?(?P<key>[A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|PWD|CREDENTIAL|DATABASE_URL|REDIS_URL)[A-Z0-9_]*)\s*=\s*(?P<quote>["']?)(?P<value>[^\r\n]*?)(?P=quote)(?=[ \t]*(?:#|\r?$))""",
         re.IGNORECASE,
@@ -70,6 +125,8 @@ class SecretSanitizer:
             "your-api-key-here",
             "your_api_key",
             "your_api_key_here",
+            "password",
+            "secret",
         }
     )
 
@@ -102,6 +159,7 @@ class SecretSanitizer:
         working = cls._PEM_PRIVATE_KEY_RE.sub(replace_pem, working)
         lines = working.splitlines(keepends=True)
         is_dotenv = cls._is_dotenv_file(file_path)
+        is_unquoted_config = file_path.lower().endswith(cls._UNQUOTED_CONFIG_SUFFIXES)
         sanitized_lines: list[str] = []
         for idx, line in enumerate(lines, start=1):
             updated_line = line
@@ -116,6 +174,10 @@ class SecretSanitizer:
             updated_line = cls._apply_assignment_pattern(
                 updated_line, line_number=idx, matches=matches
             )
+            if is_unquoted_config:
+                updated_line = cls._apply_unquoted_assignment_pattern(
+                    updated_line, line_number=idx, matches=matches
+                )
             sanitized_lines.append(updated_line)
         return SanitizationResult(
             sanitized_content="".join(sanitized_lines), redacted_secrets=matches
@@ -127,7 +189,10 @@ class SecretSanitizer:
     ) -> str:
 
         def replace_match(match: re.Match[str]) -> str:
-            secret_val = match.group(0)
+            has_value = "value" in match.re.groupindex
+            secret_val = match.group("value") if has_value else match.group(0)
+            if has_value and not cls._is_inline_secret(secret_val):
+                return match.group(0)
             placeholder = f"<REDACTED_SECRET:{pattern_spec.kind.value}>"
             matches.append(
                 SecretMatch(
@@ -137,7 +202,12 @@ class SecretSanitizer:
                     masked_preview=cls._mask_secret(secret_val),
                 )
             )
-            return placeholder
+            if not has_value:
+                return placeholder
+            start, end = match.span("value")
+            offset = match.start()
+            whole = match.group(0)
+            return whole[: start - offset] + placeholder + whole[end - offset :]
 
         return pattern_spec.regex.sub(replace_match, line)
 
@@ -150,10 +220,7 @@ class SecretSanitizer:
             prefix = match.group("prefix")
             quote = match.group("quote")
             value = match.group("value")
-            if cls._is_benign_value(value):
-                return match.group(0)
-            entropy = cls._shannon_entropy(value)
-            if entropy < 3.3 and len(value) < 16:
+            if not cls._should_redact(match.group("key"), value):
                 return match.group(0)
             placeholder = f"<REDACTED_SECRET:{SecretKind.GENERIC_HIGH_ENTROPY.value}>"
             matches.append(
@@ -169,6 +236,35 @@ class SecretSanitizer:
         return cls._SECRET_ASSIGNMENT_RE.sub(replace_match, line)
 
     @classmethod
+    def _apply_unquoted_assignment_pattern(
+        cls, line: str, line_number: int, matches: list[SecretMatch]
+    ) -> str:
+        """Scrub `key: value` lines in YAML/INI-style files where values need no quotes."""
+
+        def replace_match(match: re.Match[str]) -> str:
+            key = match.group("key")
+            value = match.group("value")
+            # URLs without userinfo (endpoints, issuers) are configuration, not credentials.
+            if not cls._PASSWORD_KEY_RE.search(key) and cls._CREDENTIAL_FREE_URL_RE.fullmatch(
+                value
+            ):
+                return match.group(0)
+            if not cls._should_redact(key, value):
+                return match.group(0)
+            placeholder = f"<REDACTED_SECRET:{SecretKind.GENERIC_HIGH_ENTROPY.value}>"
+            matches.append(
+                SecretMatch(
+                    kind=SecretKind.GENERIC_HIGH_ENTROPY,
+                    line_number=line_number,
+                    redacted_placeholder=placeholder,
+                    masked_preview=cls._mask_secret(value),
+                )
+            )
+            return f"{match.group('prefix')}{placeholder}"
+
+        return cls._UNQUOTED_ASSIGNMENT_RE.sub(replace_match, line)
+
+    @classmethod
     def _apply_dotenv_pattern(cls, line: str, line_number: int, matches: list[SecretMatch]) -> str:
 
         def replace_match(match: re.Match[str]) -> str:
@@ -176,7 +272,7 @@ class SecretSanitizer:
             key = match.group("key")
             quote = match.group("quote") or ""
             value = match.group("value").strip()
-            if cls._is_benign_value(value):
+            if not cls._should_redact(key, value, check_entropy=False):
                 return match.group(0)
             placeholder = f"<REDACTED_SECRET:{SecretKind.ENV_SECRET_ASSIGNMENT.value}>"
             matches.append(
@@ -192,18 +288,39 @@ class SecretSanitizer:
         return cls._DOTENV_LINE_RE.sub(replace_match, line)
 
     @classmethod
+    def _should_redact(cls, key: str, value: str, *, check_entropy: bool = True) -> bool:
+        """Decide whether a value assigned to a secret-looking key is a real credential."""
+        if cls._is_placeholder(value):
+            return False
+        # Passwords are often short and low-entropy, so only placeholders exempt them.
+        if cls._PASSWORD_KEY_RE.search(key):
+            return len(value.strip()) >= 4
+        if cls._is_benign_value(value):
+            return False
+        return not (check_entropy and cls._shannon_entropy(value) < 3.3 and len(value) < 16)
+
+    @classmethod
+    def _is_inline_secret(cls, value: str) -> bool:
+        """Filter credentials embedded in URLs or headers, where test fixtures abound."""
+        if cls._is_placeholder(value) or len(value) < 6:
+            return False
+        return value.lower() not in {"pass", "passwd", "test", "user"} and (
+            cls._shannon_entropy(value) >= 2.5
+        )
+
+    @classmethod
     def _is_benign_value(cls, value: str) -> bool:
+        return len(value.strip()) < 8 or cls._is_placeholder(value)
+
+    @classmethod
+    def _is_placeholder(cls, value: str) -> bool:
         stripped = value.strip()
-        if len(stripped) < 8:
-            return True
         lower = stripped.lower()
         if lower in cls._SAFE_VALUES:
             return True
         if any(lower == f"<redacted_secret:{kind.value.lower()}>" for kind in SecretKind):
             return True
-        return bool(
-            re.fullmatch(r"\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})", stripped)
-        )
+        return bool(cls._REFERENCE_RE.fullmatch(stripped) or cls._ENV_NAME_RE.fullmatch(stripped))
 
     @staticmethod
     def _is_dotenv_file(file_path: str) -> bool:
