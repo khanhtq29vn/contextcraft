@@ -18,12 +18,18 @@
 5. **Multiple-Choice Knapsack Problem (MCKP) Solver (`contextcraft/optimizer.py`, `contextcraft/formatter.py`):**
    Selects exactly one fidelity tier $l_i \in \{0, 1, 2, 3\}$ per file to maximize total architectural utility under strict token budget $B$:
 
-$$\max_{\{l_i\}} \sum_{i=1}^{N} w_i \cdot u(l_i) \quad \text{s.t.} \quad \text{Overhead}_{\text{tree}} + \sum_{i=1}^{N} C_{\text{eff}}(i, l_i) \le B$$
+$$\max_{\{l_i\}} \sum_{i=1}^{N} w_i \cdot v_i(l_i) \quad \text{s.t.} \quad \text{Overhead}_{\text{tree}} + \sum_{i=1}^{N} C_{\text{eff}}(i, l_i) \le B$$
+
+$$v_i(l) = m_i \cdot \min\big(u(l), u(2)\big) + \max\big(0, u(l) - u(2)\big), \qquad m_i = T_i^{1/3}$$
+
+   where $T_i$ is the token count of file $i$ at `FULL` fidelity. Declarations (`SIGS`, `SKEL`) are scaled by the content mass $m_i$, because a large file exposes more structure than a tiny one: without it, a 60-token config file at `FULL` scored as high as a 12,000-token core module at `FULL`, so the solver dropped central files entirely to fund dozens of trivial ones. The cube root keeps that growth sublinear: a file 1,000× larger is worth 10× more at the same rank, so it can outrank a file with up to 10× its PageRank. The function bodies that `FULL` adds keep their size-blind value $u(3) - u(2)$.
 
 ## Marginal Utility Density & "God Object" Immunity
 
 To prevent oversized hub files ("God Objects") from monopolizing the token budget at `FULL` fidelity, `TokenBudgetOptimizer` prioritizes upgrades using a min-heap ordered by **marginal utility density**:
 
-$$\rho(i, l \to l') = \frac{w_i \cdot \big(u(l') - u(l)\big)}{C_{\text{eff}}(i, l') - C_{\text{eff}}(i, l)}$$
+$$\rho(i, l \to l') = \frac{w_i \cdot \big(v_i(l') - v_i(l)\big)}{C_{\text{eff}}(i, l') - C_{\text{eff}}(i, l)}$$
 
-followed by a prefix-indexed binary-search swap refinement pass (`bisect_right`) in $O(N \log N)$ time and $O(N)$ memory, and a post-render budget verification pass in `ArtifactFormatter`.
+The greedy pass is followed by a prefix-indexed binary-search swap refinement pass (`bisect_right`) in $O(N \log N)$ time and $O(N)$ memory, and a post-render budget verification pass in `ArtifactFormatter` that trims the cheapest utility per token first.
+
+Because the `SKEL` $\to$ `FULL` increment is not scaled by $m_i$, a giant file's body upgrade has the same low density as before the content mass was introduced, while its neighbours' declaration upgrades are scaled up. The giant file therefore stays at `SKEL` until its neighbours' denser upgrades are funded.

@@ -116,6 +116,7 @@ CONTEXTCRAFT_WEB_ROOT="$HOME/repositories" uv run uvicorn web.app:app --host 127
                                      ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │ 5. TokenBudgetOptimizer (O(N log N) Heap + Prefix Swap MCKP Solver)        │
+│    • Declarations weighted by (FULL tokens)^(1/3): hubs outrank trivia     │
 │    • Marginal utility density (ΔUtility / ΔTokens) prevents "God Objects"  │
 │      from hogging FULL budget; verified by ArtifactFormatter post-check    │
 └────────────────────────────────────────────────────────────────────────────┘
@@ -123,7 +124,7 @@ CONTEXTCRAFT_WEB_ROOT="$HOME/repositories" uv run uvicorn web.app:app --host 127
 
 ---
 
-## Reproducible Benchmark (`ContextCraft v0.3.0` Repository — `258` Files, `119,813` Raw Tokens)
+## Reproducible Benchmark (`ContextCraft v0.3.1` Repository — `258` Files, `138,468` Raw Tokens)
 
 Reproduce these exact telemetry numbers on the repository root:
 
@@ -135,11 +136,11 @@ uv run python benchmarks/run_benchmark.py . --budgets 4000,6000,8000,12000,16000
 
 | Target Budget (`B`)             | Emitted Tokens | Budget Utilization | Compression Ratio | Tokens Saved | Fidelity Allocation (`FULL / SKEL / SIGS / TREE`)                              |
 | :------------------------------ | -------------: | -----------------: | ----------------: | -----------: | :----------------------------------------------------------------------------- |
-| **Uncompressed (`repomix`)**    |      `119,813` |   Overflow (`15x`) |           `1.00x` |       `0.0%` | `258 FULL`                                                                     |
-| **ContextCraft `--budget 4k`**  |        `3,971` |            `99.3%` |      **`30.17x`** |  **`96.7%`** | `FULL + SKEL + SIGS + Budgeted Tree`                                           |
-| **ContextCraft `--budget 8k`**  |        `7,991` |            `99.9%` |      **`14.99x`** |  **`93.3%`** | `5 FULL \| 15 SKEL \| 9 SIGS \| 229 TREE`                                      |
-| **ContextCraft `--budget 12k`** |       `11,991` |            `99.9%` |       **`9.99x`** |  **`90.0%`** | `10 FULL \| 20 SKEL \| 10 SIGS \| 218 TREE`                                    |
-| **ContextCraft `--budget 16k`** |       `15,980` |            `99.9%` |       **`7.50x`** |  **`86.7%`** | Core Symbol Retention (`37.4%`) & API Coverage (`29.6%`) beat Naive Truncation |
+| **Uncompressed (`repomix`)**    |      `138,468` |   Overflow (`17x`) |           `1.00x` |       `0.0%` | `258 FULL`                                                                     |
+| **ContextCraft `--budget 4k`**  |        `3,966` |            `99.2%` |      **`34.91x`** |  **`97.1%`** | `0 FULL \| 5 SKEL \| 10 SIGS \| 243 TREE`                                      |
+| **ContextCraft `--budget 8k`**  |        `7,985` |            `99.8%` |      **`17.34x`** |  **`94.2%`** | `0 FULL \| 19 SKEL \| 10 SIGS \| 229 TREE`                                     |
+| **ContextCraft `--budget 12k`** |       `11,990` |            `99.9%` |      **`11.55x`** |  **`91.3%`** | `2 FULL \| 24 SKEL \| 11 SIGS \| 221 TREE`                                     |
+| **ContextCraft `--budget 16k`** |       `15,967` |            `99.8%` |       **`8.67x`** |  **`88.5%`** | Core Symbol Retention (`44.2%`) & API Coverage (`33.0%`) beat Naive Truncation |
 
 ---
 
@@ -147,12 +148,16 @@ uv run python benchmarks/run_benchmark.py . --budgets 4000,6000,8000,12000,16000
 
 When applying `ContextCraft` to large, long-lived enterprise repositories:
 
-1. **Built-in "God Object" Protection:** `TokenBudgetOptimizer` allocates tiers by **marginal utility density** ($\rho = \Delta \text{Utility} / \Delta \text{Tokens}$), and `DependencyGraphScorer` normalizes document lengths via **BM25F** ($b = 0.75$). If a legacy codebase contains a massive 10,000-token "God Class" with high PageRank, upgrading it from `SKEL` ($u = 0.82$) to `FULL` ($u = 1.00$) has a very low density $\rho$ due to the huge $\Delta \text{Tokens}$ denominator. The solver automatically keeps the God Class at `SKEL` (preserving its interface and docstrings) while saving thousands of tokens to keep surrounding business-logic modules at `FULL`.
+1. **Built-in "God Object" Protection:** `TokenBudgetOptimizer` weights a file's declarations (`SIGS`, `SKEL`) by PageRank × its content mass ($T^{1/3}$, where $T$ is its `FULL` token count) and allocates tiers by **marginal utility density** ($\rho = \Delta \text{Utility} / \Delta \text{Tokens}$); `DependencyGraphScorer` normalizes document lengths via **BM25F** ($b = 0.75$). The content mass keeps large central files from being dropped in favor of tiny peripheral ones, while the function bodies that `FULL` adds stay size-blind: if a legacy codebase contains a massive 10,000-token "God Class" with high PageRank, upgrading it from `SKEL` ($u = 0.82$) to `FULL` ($u = 1.00$) still has a very low density $\rho$ due to the huge $\Delta \text{Tokens}$ denominator. The solver automatically keeps the God Class at `SKEL` (preserving its interface and docstrings) while saving thousands of tokens to keep surrounding business-logic modules at `FULL`.
 2. **Scope Chaining for Targeted Debugging:** For surgical bug hunting in a specific subsystem of a massive monorepo, combine `--include` / `--exclude` (or `.contextignore`) with `--focus-file`:
    ```bash
    contextcraft . --include "contextcraft/languages/**" --focus-file "contextcraft/languages/structural.py" --budget 12k
    ```
-3. **100% Offline Local LLM Workflows:** While `SecretSanitizer` automatically scrubs API keys, PEM blocks, and high-entropy secrets, proprietary business logic should never be sent to unapproved public cloud APIs. Pair `ContextCraft`'s `--budget 8k` or `16k` output directly with local models (`Qwen-2.5-Coder`, `Llama-3.3`, `DeepSeek`) running on internal GPUs via Ollama, vLLM, or `llama.cpp`.
+3. **Pin What You Are Debugging:** When a legacy file must be seen verbatim, `--pin-full` (repeatable; the same gitignore-style patterns as `--include`) keeps it at `FULL` and lets the solver budget the rest around it:
+   ```bash
+   contextcraft . --pin-full "src/billing/legacy_invoice.py" --focus "invoice rounding" --budget 16k
+   ```
+4. **100% Offline Local LLM Workflows:** While `SecretSanitizer` automatically scrubs API keys, PEM blocks, and high-entropy secrets, proprietary business logic should never be sent to unapproved public cloud APIs. Pair `ContextCraft`'s `--budget 8k` or `16k` output directly with local models (`Qwen-2.5-Coder`, `Llama-3.3`, `DeepSeek`) running on internal GPUs via Ollama, vLLM, or `llama.cpp`.
 
 ---
 

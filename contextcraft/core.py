@@ -45,6 +45,7 @@ class AnalyzedRepository:
         *,
         budget_tokens: int | str | None = None,
         output_format: OutputFormat | str | None = None,
+        pinned_full_files: list[str] | None = None,
     ) -> CompilationResult:
         """Allocate and format this snapshot without scanning, parsing, or ranking.
 
@@ -57,6 +58,8 @@ class AnalyzedRepository:
             config.budget_tokens = CompilationConfig.parse_budget(budget_tokens)
         if output_format is not None:
             config.output_format = OutputFormat(output_format.lower())
+        if pinned_full_files is not None:
+            config.pinned_full_files = pinned_full_files
         files = [
             replace(file, tiers=dict(file.tiers), redacted_secrets=list(file.redacted_secrets))
             for file in self.files
@@ -92,6 +95,7 @@ class ContextCraft:
         budget_tokens: int | str = 32_000,
         focus_query: str | None = None,
         focus_files: list[str] | None = None,
+        pinned_full_files: list[str] | None = None,
         output_format: OutputFormat | str = OutputFormat.MARKDOWN,
         include_patterns: list[str] | None = None,
         exclude_patterns: list[str] | None = None,
@@ -108,6 +112,7 @@ class ContextCraft:
                 budget_tokens=CompilationConfig.parse_budget(budget_tokens),
                 focus_query=focus_query,
                 focus_files=list(focus_files or []),
+                pinned_full_files=[] if pinned_full_files is None else pinned_full_files,
                 output_format=OutputFormat(output_format.lower()),
                 include_patterns=list(include_patterns or []),
                 exclude_patterns=list(exclude_patterns or []),
@@ -124,6 +129,7 @@ class ContextCraft:
         budget_tokens: int | str | None = None,
         focus_query: str | None = None,
         focus_files: list[str] | None = None,
+        pinned_full_files: list[str] | None = None,
         output_format: OutputFormat | str | None = None,
         include_patterns: list[str] | None = None,
         exclude_patterns: list[str] | None = None,
@@ -140,6 +146,7 @@ class ContextCraft:
             budget_tokens=budget_tokens,
             focus_query=focus_query,
             focus_files=focus_files,
+            pinned_full_files=pinned_full_files,
             output_format=output_format,
             include_patterns=include_patterns,
             exclude_patterns=exclude_patterns,
@@ -168,6 +175,7 @@ class ContextCraft:
         *,
         focus_query: str | None = None,
         focus_files: list[str] | None = None,
+        pinned_full_files: list[str] | None = None,
         include_patterns: list[str] | None = None,
         exclude_patterns: list[str] | None = None,
         redact_secrets: bool | None = None,
@@ -175,11 +183,13 @@ class ContextCraft:
         """Scan, sanitize, parse, and rank once for repeated render() calls.
 
         The snapshot retains this call's configuration, source, tiers, and ranks,
-        not live filesystem contents. Only budget and format vary during rendering.
+        not live filesystem contents. Only budget, format, and pinned files vary
+        during rendering.
         """
         config = self._effective_config(
             focus_query=focus_query,
             focus_files=focus_files,
+            pinned_full_files=pinned_full_files,
             include_patterns=include_patterns,
             exclude_patterns=exclude_patterns,
             redact_secrets=redact_secrets,
@@ -233,6 +243,7 @@ class ContextCraft:
         budget_tokens: int | str | None = None,
         focus_query: str | None = None,
         focus_files: list[str] | None = None,
+        pinned_full_files: list[str] | None = None,
         output_format: OutputFormat | str | None = None,
         include_patterns: list[str] | None = None,
         exclude_patterns: list[str] | None = None,
@@ -245,6 +256,8 @@ class ContextCraft:
             config.focus_query = focus_query
         if focus_files is not None:
             config.focus_files = list(focus_files)
+        if pinned_full_files is not None:
+            config.pinned_full_files = pinned_full_files
         if output_format is not None:
             config.output_format = OutputFormat(output_format.lower())
         if include_patterns is not None:
