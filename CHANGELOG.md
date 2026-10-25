@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/khanhtq29vn/contextcraft/compare/v0.3.1...v0.3.2) (2026-10-24)
+
+
+### Bug Fixes
+
+* stop secret-sanitizer leaks and --focus-file substring matches ([#29](https://github.com/khanhtq29vn/contextcraft/issues/29)) ([e30b011](https://github.com/khanhtq29vn/contextcraft/commit/e30b011eef88d911492146327c01d1f83a96aef5))
+
 ## [0.3.1](https://github.com/khanhtq29vn/contextcraft/compare/v0.3.0...v0.3.1) (2026-10-23)
 
 
