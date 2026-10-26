@@ -234,7 +234,8 @@ class ArtifactFormatter:
         Allocation works on estimates, so a pin can end a tier lower than the real
         output allows. Pins are raised in batches, rank order within each tier;
         each batch makes room by trimming unpinned files only and is undone if that
-        is not enough. A failed single pin is skipped, and two in a row end the tier.
+        is not enough. A failed single pin is skipped and the others are still tried,
+        within the overall attempt limit.
         """
         ranked = sorted(
             (file for file in files if file.rel_path in pinned),
@@ -245,7 +246,6 @@ class ArtifactFormatter:
         blocked: set[str] = set()
         for level in (FidelityLevel.SIGNATURES, FidelityLevel.SKELETON, FidelityLevel.FULL):
             single = False
-            failures = 0
             while attempts < self._MAX_PIN_RAISES:
                 room = self.config.budget_tokens - used_tokens
                 room += sum(
@@ -284,7 +284,6 @@ class ArtifactFormatter:
                     used_tokens = count
                     changed = True
                     single = False
-                    failures = 0
                     continue
                 for file, fidelity in before:
                     file.selected_fidelity = fidelity
@@ -292,9 +291,6 @@ class ArtifactFormatter:
                 trimmed_from.update(trimmed_before)
                 if len(batch) == 1:
                     blocked.add(batch[0].rel_path)
-                    failures += 1
-                    if failures == 2:
-                        break
                 single = True
         return changed, used_tokens
 
@@ -337,14 +333,13 @@ class ArtifactFormatter:
 
         Whole-file tiers make the last trim overshoot, sometimes by hundreds of
         tokens. Each batch is checked against the real artifact and undone if it
-        overflows; a failed single step stops that file, and two in a row (when
-        escaping makes every estimate too low) stop the pass.
+        overflows; a failed single step stops that file while the others are still
+        tried, within the render limit.
         """
         by_path = {file.rel_path: file for file in files}
         open_paths = dict(trimmed_from)
         changed = False
         single = False
-        failures = 0
         for _ in range(self._MAX_REFILL_RENDERS):
             slack = self.config.budget_tokens - used_tokens
             candidates: list[tuple[float, str, FidelityLevel, int]] = []
@@ -380,15 +375,11 @@ class ArtifactFormatter:
                 used_tokens = count
                 changed = True
                 single = False
-                failures = 0
                 continue
             for file, fidelity in batch:
                 file.selected_fidelity = fidelity
             if len(batch) == 1:
                 del open_paths[batch[0][0].rel_path]
-                failures += 1
-                if failures == 2:
-                    return changed
             single = True
         return changed
 

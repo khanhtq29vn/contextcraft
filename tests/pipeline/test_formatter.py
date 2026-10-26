@@ -299,10 +299,10 @@ def test_large_overflows_are_trimmed_in_a_few_renders(
     result = snapshot.render(budget_tokens=budget)
 
     # JSON escaping overflows the estimate by thousands of tokens; trimming one file per
-    # render took about 60 renders.
+    # render took about 60 renders. Refill may spend all of its renders on failed steps.
     assert result.stats.compressed_tokens <= budget
     assert result.stats.budget_utilization_pct >= 95
-    assert renders <= 15
+    assert renders <= 12 + ArtifactFormatter._MAX_REFILL_RENDERS
 
 
 def test_trimmed_pins_keep_their_priority_after_re_allocation(tmp_path: Path) -> None:

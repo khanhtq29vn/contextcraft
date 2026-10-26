@@ -20,9 +20,7 @@ def matches_path_patterns(rel_path: str, patterns: list[str]) -> bool:
 
     A bare name matches at any depth, a "/" at the start or in the middle anchors
     to the repository root, a directory matches everything beneath it, "!" negates
-    an earlier pattern, and backslash escapes work as in .gitignore. Beyond
-    --include, a leading "./" also anchors to the root and, on Windows, "\\"
-    separates paths (so escapes there need character classes such as "[[]").
+    an earlier pattern, and backslash escapes work as in .gitignore.
     """
     lines = tuple(line for line in map(_normalize_pattern, patterns) if line)
     return bool(lines) and _path_spec(lines).match_file(rel_path)

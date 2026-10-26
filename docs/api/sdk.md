@@ -53,8 +53,6 @@ Render defaults are copied from the compiler configuration at analysis time.
 Focus, file filters, secret redaction, and tokenizer encoding are fixed for that
 snapshot. Create a new analysis to change these options or pick up disk changes.
 `analyze()` also accepts per-call focus, include/exclude, and redaction overrides.
-`render()` also accepts `pinned_full_files`, because pinning changes only the
-allocation, not the analysis.
 
 Each render returns independent file allocation state and does not alter earlier
 results. Parsed ASTs and immutable rendered tiers are shared; treat snapshot files
@@ -117,25 +115,6 @@ are validated.
 case-insensitive `k` (1,000) or `m` (1,000,000) suffixes. Outer whitespace and
 whitespace before the suffix are accepted. Fractional tokens are truncated;
 zero, negative values, booleans, and invalid formats raise `InvalidBudgetError`.
-
-`pinned_full_files` uses the same gitignore-style patterns as `--pin-full` and
-`include_patterns`: a bare name matches at any depth, a `/` at the start or in
-the middle anchors to the repository root, a directory matches everything
-beneath it, `!` negates an earlier pattern, and backslash escapes work as in
-`.gitignore`. Pins also accept a leading `./` (anchored to the root) and, on
-Windows, `\` as a separator (use character classes such as `[[]` instead of
-escapes there); `include_patterns` does not.
-
-Pinned files are allocated before all others, tier by tier: every pin whose
-signatures fit gets them before any pin gets a skeleton, and every pin whose
-skeleton then fits gets it before any pin gets its full source, highest PageRank
-first at each step. A pin's signatures are never given up for another pin's
-richer tier, but a pin whose next tier does not fit is skipped while smaller pins
-may still be raised. The remaining files share what is left. Allocation uses
-estimated costs, so after rendering the formatter raises pins in measured steps
-to richer tiers that fit the real artifact (making room by trimming unpinned
-files only), and it trims pins only after every other file is down to `TREE`, so
-the token budget is never exceeded.
 
 ```python
 from contextcraft import CompilationConfig, ContextCraft
