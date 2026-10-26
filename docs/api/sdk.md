@@ -102,6 +102,7 @@ are validated.
 | `budget_tokens`       | `32000`                 | Positive token budget; accepts integer or shorthand input |
 | `focus_query`         | `None`                  | Query used to boost relevant files                        |
 | `focus_files`         | `[]`                    | Relative paths or globs to boost                          |
+| `pinned_full_files`   | `[]`                    | Gitignore-style patterns allocated `FULL` first           |
 | `output_format`       | `OutputFormat.MARKDOWN` | Artifact format                                           |
 | `include_patterns`    | `[]`                    | Include globs; empty means no include filter              |
 | `exclude_patterns`    | `[]`                    | Additional exclude globs                                  |

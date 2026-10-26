@@ -62,12 +62,14 @@ def test_optimizer_prioritizes_ranked_fidelity_over_declaration_count() -> None:
 
     assert summary.allocated_code_tokens <= 70
     assert [file.selected_fidelity for file in files] == [FidelityLevel.FULL, FidelityLevel.TREE]
-    assert summary.objective_score == 0.6
+    mass = 40 ** (1 / 3)
+    assert summary.objective_score == pytest.approx(0.6 * (0.82 * mass + 0.18))
     for file in files:
         for level in FidelityLevel:
-            assert (
-                optimizer.tier_utility(file, level) == file.pagerank_score * level.semantic_utility
-            )
+            # Declarations scale with content mass; the bodies FULL adds do not.
+            structure = min(level.semantic_utility, 0.82)
+            expected = file.pagerank_score * (structure * mass + level.semantic_utility - structure)
+            assert optimizer.tier_utility(file, level) == pytest.approx(expected)
     files[0].pagerank_score = 0
     assert optimizer.tier_utility(files[0], FidelityLevel.FULL) == 0
 
@@ -194,3 +196,205 @@ def test_indexed_refinement_matches_exhaustive_search(seed: int) -> None:
     assert [file.selected_fidelity for file in files] == [
         file.selected_fidelity for file in expected
     ]
+
+
+def _tiered_file(path: str, rank: float, sigs: int, skel: int, full: int) -> FileAnalysis:
+    costs = (0, sigs, skel, full)
+    return FileAnalysis(
+        path,
+        path,
+        "text",
+        0,
+        ParsedAst(source=b""),
+        tiers={
+            level: RenderedTier("", cost) for level, cost in zip(FidelityLevel, costs, strict=True)
+        },
+        pagerank_score=rank,
+    )
+
+
+def _allocate(files: list[FileAnalysis], budget: int) -> list[FileAnalysis]:
+    TokenBudgetOptimizer(CompilationConfig(budget_tokens=budget)).optimize(
+        files, tree_overhead_tokens=0
+    )
+    return files
+
+
+def test_large_central_file_is_kept_before_tiny_low_rank_files() -> None:
+    hub = _tiered_file("hub.py", 0.30, 2518, 6000, 12000)
+    trivia = [_tiered_file(f"config/{index}.yaml", 0.005, 20, 40, 60) for index in range(30)]
+
+    _allocate([hub, *trivia], 3000)
+
+    assert hub.selected_fidelity == FidelityLevel.SIGNATURES
+    assert all(file.selected_fidelity < FidelityLevel.FULL for file in trivia)
+
+
+def test_central_go_files_are_not_dropped_for_low_rank_trivia() -> None:
+    # Tier sizes and ranks measured on gin's context.go and gin.go.
+    context = _tiered_file("context.go", 0.0913, 2601, 8103, 12346)
+    gin = _tiered_file("gin.go", 0.0585, 1651, 3882, 7420)
+    trivia = [_tiered_file(f"doc{index}.md", 0.002, 30, 45, 60) for index in range(60)]
+
+    _allocate([context, gin, *trivia], 6000)
+
+    assert context.selected_fidelity >= FidelityLevel.SIGNATURES
+    assert gin.selected_fidelity >= FidelityLevel.SIGNATURES
+
+
+@pytest.mark.parametrize(
+    ("god", "modules", "count"),
+    [
+        ((0.25, 800, 3000, 12000), (0.025, 40, 120, 300), 30),
+        ((0.6, 3000, 12000, 40000), (0.04, 200, 500, 1000), 10),
+        # Realistic hub shapes, where SKEL keeps most of the source: gin's context.go
+        # and flask's sansio/app.py, and the README's 10,000-token God class.
+        ((0.25, 2601, 8103, 12346), (0.025, 150, 600, 1200), 25),
+        ((0.15, 1079, 6255, 8705), (0.02, 200, 700, 1500), 20),
+        ((0.46, 950, 3300, 10000), (0.023, 120, 445, 800), 20),
+    ],
+)
+def test_god_object_never_takes_full_while_a_neighbour_lacks_a_skeleton(
+    god: tuple[float, int, int, int], modules: tuple[float, int, int, int], count: int
+) -> None:
+    neighbours_full = count * (modules[3] + TokenBudgetOptimizer.FILE_WRAPPER_OVERHEAD_TOKENS)
+    for budget in range(1000, god[3] + neighbours_full + 2000, 250):
+        files = _allocate(
+            [
+                _tiered_file("god.py", *god),
+                *(_tiered_file(f"m{index}.py", *modules) for index in range(count)),
+            ],
+            budget,
+        )
+        if files[0].selected_fidelity == FidelityLevel.FULL:
+            assert min(file.selected_fidelity for file in files[1:]) >= FidelityLevel.SKELETON
+
+
+def test_god_object_stays_elided_while_its_neighbours_get_full_source() -> None:
+    files = _allocate(
+        [
+            _tiered_file("god.py", 0.25, 800, 3000, 12000),
+            *(_tiered_file(f"m{index}.py", 0.025, 40, 120, 300) for index in range(30)),
+        ],
+        16000,
+    )
+
+    assert files[0].selected_fidelity == FidelityLevel.SKELETON
+    assert all(file.selected_fidelity == FidelityLevel.FULL for file in files[1:])
+
+
+@pytest.mark.parametrize("seed", range(30))
+def test_lower_ranked_twin_never_gets_a_richer_tier(seed: int) -> None:
+    rng = random.Random(seed)
+    files = []
+    for index in range(10):
+        full = rng.randrange(40, 4000)
+        sigs, skel = sorted(max(1, int(full * rng.uniform(0.05, 0.9))) for _ in range(2))
+        rank = rng.uniform(0.01, 0.3)
+        files.append(_tiered_file(f"a{index}", rank, sigs, skel, full))
+        files.append(_tiered_file(f"b{index}", rank / 2, sigs, skel, full))
+    budget = rng.randrange(200, sum(file.raw_tokens for file in files))
+
+    _allocate(files, budget)
+
+    for original, twin in zip(files[::2], files[1::2], strict=True):
+        assert twin.selected_fidelity <= original.selected_fidelity
+
+
+@pytest.mark.parametrize("output_format", ["markdown", "json", "xml"])
+def test_central_module_survives_tiny_config_files_in_every_format(
+    tmp_path: Path, output_format: str
+) -> None:
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "core.py").write_text(
+        "".join(
+            f"def operation_{index}(value: int, scale: int = {index}) -> int:\n"
+            f'    """Apply operation {index} to the value."""\n'
+            f"    result = value * scale + {index}\n"
+            "    for step in range(3):\n"
+            f"        result += step * {index}\n"
+            "    return result\n\n"
+            for index in range(60)
+        )
+    )
+    imported = ", ".join(f"operation_{index}" for index in range(0, 60, 7))
+    calls = "\n".join(f"    total += operation_{index}(total)" for index in range(0, 60, 7))
+    for name in ("api", "cli", "jobs", "web"):
+        (tmp_path / "app" / f"{name}.py").write_text(
+            f"from app.core import {imported}\n\n\n"
+            f"def run_{name}(total: int) -> int:\n{calls}\n    return total\n"
+        )
+    (tmp_path / "config").mkdir()
+    for index in range(40):
+        (tmp_path / "config" / f"service_{index}.yaml").write_text(
+            f"name: service-{index}\nreplicas: {index % 3 + 1}\n"
+        )
+
+    result = ContextCraft(budget_tokens=2000, output_format=output_format).compile(tmp_path)
+    fidelity = {file.rel_path: file.selected_fidelity for file in result.files}
+
+    assert result.stats.compressed_tokens <= 2000
+    assert fidelity["app/core.py"] >= FidelityLevel.SIGNATURES
+
+
+def _allocate_with_pins(
+    files: list[FileAnalysis], budget: int, pins: list[str]
+) -> list[FileAnalysis]:
+    config = CompilationConfig(budget_tokens=budget, pinned_full_files=pins)
+    TokenBudgetOptimizer(config).optimize(files, tree_overhead_tokens=0)
+    return files
+
+
+def test_pinned_file_is_kept_full_and_the_rest_share_the_remainder() -> None:
+    god = _tiered_file("legacy/god.py", 0.25, 800, 3000, 12000)
+    modules = [_tiered_file(f"m{index}.py", 0.025, 40, 120, 300) for index in range(30)]
+
+    files = _allocate_with_pins([god, *modules], 16000, ["legacy/"])
+
+    assert god.selected_fidelity == FidelityLevel.FULL
+    assert all(module.selected_fidelity >= FidelityLevel.SIGNATURES for module in modules)
+    assert (
+        sum(TokenBudgetOptimizer._effective_tier_cost(f, f.selected_fidelity) for f in files)
+        <= 16000
+    )
+
+
+def test_pinned_files_are_raised_tier_by_tier_in_rank_order() -> None:
+    def repository() -> list[FileAnalysis]:
+        return [
+            _tiered_file("low.py", 0.01, 100, 400, 900),
+            _tiered_file("high.py", 0.02, 100, 400, 900),
+            _tiered_file("hub.py", 0.9, 100, 500, 1000),
+        ]
+
+    # 1400 tokens fund both pins' signatures and skeletons but only one full source.
+    low, high, hub = _allocate_with_pins(repository(), 1400, ["low.py", "high.py"])
+    unpinned = {file.rel_path: file.selected_fidelity for file in _allocate(repository(), 1400)}
+
+    assert high.selected_fidelity == FidelityLevel.FULL
+    assert low.selected_fidelity == FidelityLevel.SKELETON
+    assert hub.selected_fidelity == FidelityLevel.TREE
+    # Without pins the central hub would take the budget instead.
+    assert unpinned["hub.py"] == FidelityLevel.FULL
+    assert unpinned["high.py"] < FidelityLevel.FULL
+
+
+def test_no_pinned_file_is_dropped_while_another_pin_is_above_signatures() -> None:
+    big = _tiered_file("big.py", 0.5, 300, 3000, 9000)
+    small = _tiered_file("small.py", 0.1, 200, 400, 800)
+
+    # Raising big.py to SKEL first would leave small.py out entirely.
+    _allocate_with_pins([big, small], 3100, ["big.py", "small.py"])
+
+    assert big.selected_fidelity == FidelityLevel.SIGNATURES
+    assert small.selected_fidelity == FidelityLevel.FULL
+
+
+def test_pinned_files_are_honoured_even_against_the_objective() -> None:
+    peripheral = _tiered_file("peripheral.py", 0.001, 100, 200, 1000)
+    hub = _tiered_file("hub.py", 0.5, 300, 600, 1000)
+
+    _allocate_with_pins([peripheral, hub], 1100, ["peripheral.py"])
+
+    assert peripheral.selected_fidelity == FidelityLevel.FULL
+    assert hub.selected_fidelity == FidelityLevel.TREE

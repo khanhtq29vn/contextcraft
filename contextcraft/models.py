@@ -77,6 +77,7 @@ class CompilationConfig(BaseModel):
     budget_tokens: int = Field(default=32000, gt=0)
     focus_query: str | None = Field(default=None)
     focus_files: list[str] = Field(default_factory=list)
+    pinned_full_files: list[str] = Field(default_factory=list)
     output_format: OutputFormat = Field(default=OutputFormat.MARKDOWN)
     include_patterns: list[str] = Field(default_factory=list)
     exclude_patterns: list[str] = Field(default_factory=list)

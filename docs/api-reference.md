@@ -30,6 +30,7 @@ contextcraft --help
 | `--encoding`, `-enc` | Tiktoken encoding name used for token accounting (e.g. `cl100k_base`, `o200k_base`) | `cl100k_base` |
 | `--focus`, `-f`      | Query or symbol keywords to bias ranking                                            | None          |
 | `--focus-file`       | Relative file path or glob to boost (repeatable)                                    | None          |
+| `--pin-full`         | Gitignore-style pattern kept at `FULL` before budgeting the rest (repeatable)       | None          |
 | `--format`, `-m`     | `markdown`, `xml`, or `json` (case-insensitive)                                     | `markdown`    |
 | `--output`, `-o`     | Write the artifact to a file                                                        | None          |
 | `--include`, `-i`    | Include glob (repeatable)                                                           | None          |

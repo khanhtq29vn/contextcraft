@@ -6,9 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from contextcraft import (
     CompilationConfig,
+    CompilationResult,
     ContextCraft,
     FidelityLevel,
     InvalidBudgetError,
@@ -303,3 +305,41 @@ def test_analysis_overrides_filters_and_redaction_without_mutating_config(tmp_pa
     assert compiler.config.focus_query is None
     assert compiler.config.focus_files == []
     assert secret not in compiler.analyze(tmp_path).render().content
+
+
+def test_pinned_files_override_per_render_and_per_compile(tmp_path: Path) -> None:
+    (tmp_path / "legacy.py").write_text(
+        "".join(f"def legacy_{index}(value):\n    return value * {index}\n" for index in range(80))
+    )
+    for index in range(6):
+        (tmp_path / f"module_{index}.py").write_text(
+            f"def run_{index}(value):\n    return value + {index}\n"
+        )
+    compiler = ContextCraft(budget_tokens=1400)
+    snapshot = compiler.analyze(tmp_path)
+
+    plain = snapshot.render()
+    pinned = snapshot.render(pinned_full_files=["legacy.py"])
+    compiled = compiler.compile(tmp_path, pinned_full_files=["./legacy.py"])
+
+    def fidelity(result: CompilationResult) -> FidelityLevel:
+        return next(f.selected_fidelity for f in result.files if f.rel_path == "legacy.py")
+
+    assert fidelity(plain) < FidelityLevel.FULL
+    assert fidelity(pinned) == FidelityLevel.FULL
+    assert fidelity(compiled) == FidelityLevel.FULL
+    assert pinned.stats.compressed_tokens <= 1400
+    assert fidelity(snapshot.render()) == fidelity(plain)
+
+
+def test_pinned_files_reject_a_bare_string(tmp_path: Path) -> None:
+    (tmp_path / "legacy.py").write_text("def run():\n    return 1\n")
+
+    with pytest.raises(ValidationError):
+        ContextCraft(pinned_full_files="legacy.py")  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        ContextCraft().analyze(tmp_path).render(pinned_full_files="*.py")  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        ContextCraft().compile(tmp_path, pinned_full_files="legacy.py")  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        ContextCraft().analyze(tmp_path, pinned_full_files="legacy.py")  # type: ignore[arg-type]
