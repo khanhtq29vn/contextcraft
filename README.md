@@ -54,7 +54,9 @@ uv run contextcraft . --budget 8k --encoding o200k_base -o context.md
 ```python
 from contextcraft import ContextCraft, OutputFormat
 
-cc = ContextCraft(focus_query="AST elision and knapsack optimizer", tokenizer_encoding="o200k_base")
+cc = ContextCraft(
+    focus_query="AST elision and knapsack optimizer", tokenizer_encoding="o200k_base"
+)
 
 # Analyze once (scan, sanitize, parse Tree-sitter ASTs, and compute PageRank):
 snapshot = cc.analyze(".")

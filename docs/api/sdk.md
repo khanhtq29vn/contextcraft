@@ -4,139 +4,190 @@
 
 ```{eval-rst}
 .. autoclass:: contextcraft.ContextCraft
-   :members: compile, analyze, analyze_repository
-   :undoc-members:
+
+.. py:method:: contextcraft.ContextCraft.compile(path: str | pathlib.Path) -> contextcraft.models.Artifact
+
+   Compile a repository and return a budgeted artifact.
 ```
 
-Create a compiler with keyword options or a `CompilationConfig`. When `config`
-is supplied, it is deep-copied and the constructor's other configuration
-keywords are ignored. `registry` is independent of the configuration and is
-used directly; omit it to create a fresh built-in registry.
+Pass a `Config` instance to set the budget, focus, file exclusions, and output
+format. The compiler uses that instance directly; it does not copy it.
 
 ```python
-from contextcraft import ContextCraft, OutputFormat
+from contextcraft import ContextCraft
+from contextcraft.config import Config, OutputFormat
 
-compiler = ContextCraft(budget_tokens="16k", exclude_patterns=["tests/**"])
-result = compiler.compile(".", focus_query="authentication", output_format=OutputFormat.XML)
-print(result.content)
-print(result.stats.compressed_tokens)
+config = Config(
+    budget_tokens=16000,
+    focus_query="authentication",
+    exclude_patterns=["tests/**"],
+    output_format=OutputFormat.XML,
+)
+compiler = ContextCraft(config)
+artifact = compiler.compile(".")
+print(artifact.content)
+print(artifact.tokens)
 ```
 
-### compile
+`compile(path)` accepts a string or `pathlib.Path`. A directory is scanned
+recursively. If a file is supplied, its parent directory is scanned, not just
+that file. A Git checkout is not required.
 
-Scans the directory, redacts secrets if enabled, parses files, renders fidelity
-tiers, ranks dependencies, selects tiers within the budget, and formats the
-artifact. A Git checkout is not required.
+Each call indexes files, loads and optionally redacts source, resolves imports,
+ranks the dependency graph, renders fidelity tiers, allocates the budget, and
+formats an [Artifact](models.md). It reads the repository again on every call;
+there is no snapshot or `analyze()` API.
 
-Non-`None` per-call options override the stored configuration for that call
-without mutating it. Lists replace rather than extend configured lists. Pass
-`[]` to clear configured focus files or include/exclude patterns. Passing
-`None` retains the configured value, including `focus_query`.
-
-The return value is a [CompilationResult](models.md).
-`content` contains the requested output format. The compatibility properties
-`markdown` and `text_content` both return `content`, even for XML or JSON.
-
-### Analyze once, render multiple times
-
-`analyze()` returns an `AnalyzedRepository` snapshot. It scans, sanitizes, parses,
-creates fidelity tiers, and ranks files once. Call `render()` to try different
-budgets or output formats without repeating that work:
-
-```python
-repository = ContextCraft(focus_query="authentication").analyze(".")
-small = repository.render(budget_tokens="4k")
-large = repository.render(budget_tokens="32k", output_format="xml")
-```
-
-Render defaults are copied from the compiler configuration at analysis time.
-Focus, file filters, secret redaction, and tokenizer encoding are fixed for that
-snapshot. Create a new analysis to change these options or pick up disk changes.
-`analyze()` also accepts per-call focus, include/exclude, and redaction overrides.
-
-Each render returns independent file allocation state and does not alter earlier
-results. Parsed ASTs and immutable rendered tiers are shared; treat snapshot files
-and their ASTs as read-only. The snapshot retains analyzed source in memory until
-released, including unredacted source if redaction was disabled. Token-count
-caches belong to the snapshot, not a global repository cache, and retain at most
-256 texts of up to 16,384 characters each.
-
-`render().stats.execution_time_ms` measures allocation and formatting only;
-`compile()` continues to report the complete pipeline's execution time.
-
-```{eval-rst}
-.. autoclass:: contextcraft.AnalyzedRepository
-   :members: render
-```
-
-### analyze_repository
-
-Returns ranked `FileAnalysis` objects with parsed ASTs and rendered tiers,
-without budget optimization or artifact formatting. `selected_fidelity`
-therefore remains `TREE`; read `tiers` explicitly to inspect richer content.
-Secret redaction follows the compiler configuration and happens before parsing.
-
-```python
-from contextcraft import ContextCraft, FidelityLevel
-
-for file in ContextCraft().analyze_repository("."):
-    print(file.rel_path, file.pagerank_score)
-    print(file.tiers[FidelityLevel.SIGNATURES].content)
-    for symbol in file.symbols:
-        print(file.parsed.text(symbol.signature_range))
-```
+To change settings for another compilation, update the shared config or create
+a new compiler. Pass language classes through the keyword-only `languages`
+argument to replace the built-in language set; see [Language Extension API](languages.md).
 
 ## Configuration
 
 ```{eval-rst}
-.. autoclass:: contextcraft.CompilationConfig
-   :members: parse_budget
-   :undoc-members:
+.. autoclass:: contextcraft.config.Config
 ```
 
-Configuration is a Pydantic model. Unknown fields are rejected and assignments
-are validated.
+`Config` is a mutable, keyword-only `msgspec.Struct`. Use enum members for
+`output_format` and `tokenizer_encoding` when constructing it directly.
 
-| Field                 | Default                 | Meaning                                                   |
-| :-------------------- | :---------------------- | :-------------------------------------------------------- |
-| `budget_tokens`       | `32000`                 | Positive token budget; accepts integer or shorthand input |
-| `focus_query`         | `None`                  | Query used to boost relevant files                        |
-| `focus_files`         | `[]`                    | Relative paths or globs to boost                          |
-| `output_format`       | `OutputFormat.MARKDOWN` | Artifact format                                           |
-| `include_patterns`    | `[]`                    | Include globs; empty means no include filter              |
-| `exclude_patterns`    | `[]`                    | Additional exclude globs                                  |
-| `respect_gitignore`   | `True`                  | Apply `.gitignore` and `.contextignore` rules             |
-| `redact_secrets`      | `True`                  | Redact detected secrets before parsing                    |
-| `max_file_size_bytes` | `1048576`               | Positive maximum file size                                |
-| `tokenizer_encoding`  | `"cl100k_base"`         | tiktoken encoding name                                    |
+| Field                   | Default                         | Meaning                                                               |
+| :---------------------- | :------------------------------ | :-------------------------------------------------------------------- |
+| `budget_tokens`         | `16000`                         | Positive integer output token budget                                  |
+| `focus_query`           | `None`                          | Query used to prefer relevant files                                   |
+| `focus_files`           | `[]`                            | Repository-relative paths, filenames, directories, or globs to prefer |
+| `output_format`         | `OutputFormat.MARKDOWN`         | Artifact format                                                       |
+| `exclude_patterns`      | `[]`                            | Additional ignore globs                                               |
+| `respect_gitignore`     | `True`                          | Respect Git ignore rules during indexing                              |
+| `redact_secrets`        | `True`                          | Redact recognized secrets before source analysis                      |
+| `max_file_size_bytes`   | `1048576`                       | Positive maximum source size in bytes                                 |
+| `tokenizer_encoding`    | `TokenizerEncoding.CL100K_BASE` | Tiktoken encoding for token accounting                                |
+| `allow_token_estimates` | `False`                         | Allow approximate counts if tokenization fails                        |
 
-`parse_budget()` accepts positive integers and decimal strings with optional
-case-insensitive `k` (1,000) or `m` (1,000,000) suffixes. Outer whitespace and
-whitespace before the suffix are accepted. Fractional tokens are truncated;
-zero, negative values, booleans, and invalid formats raise `InvalidBudgetError`.
+Direct construction and assignment do not validate field types or constraints.
+For validated input, use `msgspec.convert()` or a typed msgspec decoder. Unknown
+fields are rejected during typed decoding or conversion. Budgets are integers;
+there is no shorthand parser for values such as `"16k"`.
 
 ```python
-from contextcraft import CompilationConfig, ContextCraft
+import msgspec
 
-config = CompilationConfig(budget_tokens="1.5k", focus_files=["src/**"])
-assert config.budget_tokens == 1500
-compiler = ContextCraft(config)
+from contextcraft.config import Config
+
+config = msgspec.convert(
+    {"budget_tokens": 8000, "output_format": "json"},
+    type=Config,
+)
 ```
+
+```{eval-rst}
+.. autoclass:: contextcraft.config.OutputFormat
+   :members:
+
+.. autoclass:: contextcraft.config.TokenizerEncoding
+   :members:
+```
+
+## Pipeline stages
+
+Use the stages directly when you need the index, import resolutions, file
+scores, or rendered tiers before formatting. Pass records from the same analysis
+through the pipeline so their file, module, and import IDs agree.
+
+```python
+from contextcraft.config import Config
+from contextcraft.formatter import ArtifactFormatter
+from contextcraft.graph import GraphBuilder, GraphScorer
+from contextcraft.imports import ImportResolver
+from contextcraft.index import Indexer
+from contextcraft.optimizer import BudgetAllocator
+from contextcraft.source import SourceLoader
+from contextcraft.tiers import TierRenderer
+
+config = Config(budget_tokens=8000)
+index = Indexer().index(".", config)
+source = SourceLoader().load(index, config)
+resolutions = ImportResolver().resolve(index, source)
+graph = GraphBuilder().build(index, source, resolutions)
+scores = GraphScorer().score(index, source, graph, config)
+tiers = TierRenderer().render(index, source, config)
+selection = BudgetAllocator().allocate(index, tiers, scores, config)
+artifact = ArtifactFormatter().format(index, tiers, scores, selection, config)
+```
+
+Indexing records detected language implementations in `index.languages`.
+Later stages require an entry for every non-null `File.language_id` they use;
+a missing implementation raises `KeyError`. Files with no detected language
+retain their source without language-specific analysis.
+
+```{eval-rst}
+.. autoclass:: contextcraft.index.Indexer
+   :members: index
+
+.. autoclass:: contextcraft.source.SourceLoader
+   :members: load
+
+.. autoclass:: contextcraft.imports.ImportResolver
+   :members: resolve
+
+.. autoclass:: contextcraft.graph.GraphBuilder
+   :members: build
+
+.. autoclass:: contextcraft.graph.GraphScorer
+
+.. py:method:: contextcraft.graph.GraphScorer.score(index: contextcraft.models.Index, source: contextcraft.models.Source, graph: rustworkx.PyDiGraph, config: contextcraft.config.Config) -> dict[int, float]
+
+   Return personalized PageRank scores keyed by file ID. Query matching uses
+   paths, signatures, docstrings, and source. An empty graph returns an empty
+   mapping.
+
+.. autoclass:: contextcraft.tiers.TierRenderer
+   :members: render
+
+.. autoclass:: contextcraft.optimizer.BudgetAllocator
+   :members: allocate
+
+.. autoclass:: contextcraft.formatter.ArtifactFormatter
+   :members: file_cost, render, directory_tree, format
+```
+
+Allocation uses framed token costs to choose tiers. `ArtifactFormatter.format()`
+checks the complete serialized output and may downgrade tiers or shorten the
+path listing to fit the budget. `render()` alone does not enforce a budget.
+
+## Token counting
+
+```{eval-rst}
+.. py:class:: contextcraft.tiers.TokenCounter(encoding: contextcraft.config.TokenizerEncoding, *, allow_estimates: bool = False)
+
+   Count tokens with the requested encoding and an optional fallback estimate.
+   The ``used_estimates`` attribute stays true after any call uses an estimate.
+
+   .. py:method:: count(content: str) -> int
+
+      Return the token count, or zero for empty content. Special-token text is
+      counted as ordinary text.
+```
+
+Exact tiktoken counts are the default. Loading an encoding may download its
+data. If `allow_estimates=True`, loading or encoding failures can fall back to
+an estimate; invalid encoding names still raise `ValueError`. Check
+`used_estimates` on the counter or `token_counts_estimated` on the artifact
+before treating the budget as exact.
 
 ## Errors
 
-All package-specific exceptions below inherit from `ContextCraftError`.
-Validation errors from Pydantic and errors from external dependencies may also
-propagate; they are not all wrapped in this hierarchy.
+The SDK propagates pipeline and dependency exceptions; it does not wrap them in
+a package-specific exception hierarchy.
 
-| Exception                 | Meaning                                                |
-| :------------------------ | :----------------------------------------------------- |
-| `ContextCraftError`       | Base package exception                                 |
-| `RepositoryNotFoundError` | Repository path is missing or is not a directory       |
-| `InvalidBudgetError`      | Unsupported budget type, format, or non-positive value |
-| `ASTParseError`           | AST parsing error type                                 |
-| `CompilationError`        | Compilation error type                                 |
+- `OSError`, including `FileNotFoundError` and `NotADirectoryError`, reports
+  unreadable paths or sources.
+- `ValueError` reports an invalid allocation budget, framing that cannot fit,
+  or an invalid tokenizer encoding. Lower-level stages also validate file
+  coverage and score values.
+- `KeyError` reports missing referenced records or detected language implementations.
+- `msgspec.ValidationError` reports invalid input during typed decoding or conversion.
 
-These exceptions are importable directly from `contextcraft`. Parser errors
-may instead be represented by `ParsedAst.has_errors`; do not assume every
-syntax error raises `ASTParseError`.
+Other dependency errors, including walker, parser, and tokenizer failures,
+propagate unless the relevant stage explicitly handles them. Enabling secret
+redaction does not guarantee that every secret is detected.

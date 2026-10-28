@@ -1,340 +1,253 @@
+"""Serialize selected file tiers and enforce the final output budget."""
+
 from __future__ import annotations
 
 import json
 import re
-import xml.etree.ElementTree as ET
-from collections import Counter
-from pathlib import Path
-from typing import Any
+from xml.etree import ElementTree as ET
 
-from contextcraft.elider import FidelityLevel, TokenCounter, TokenCounterProtocol
-from contextcraft.models import (
-    CompilationConfig,
-    CompilationResult,
-    CompilationStats,
-    FileAnalysis,
-    InvalidBudgetError,
-    OutputFormat,
-)
-from contextcraft.optimizer import TokenBudgetOptimizer
+from contextcraft.config import Config, OutputFormat
+from contextcraft.models import Artifact, FidelityLevel, Index, Selection, Tiers
+from contextcraft.tiers import TokenCounter
 
 
 class ArtifactFormatter:
-    """Render selected tiers and verify the complete artifact's token budget."""
+    """Format repository context as Markdown, XML, or JSON."""
 
-    def __init__(
+    def _render_file(
         self,
-        config: CompilationConfig,
-        token_counter: TokenCounterProtocol | None = None,
-    ) -> None:
-        self.config = config
-        self._compact_tree_key: tuple[str, int, tuple[tuple[str, float], ...]] | None = None
-        self._compact_tree = ""
-        self.token_counter = (
-            token_counter if token_counter is not None else TokenCounter(config.tokenizer_encoding)
-        )
-
-    def format_result(
-        self,
-        *,
-        root_path: str | Path,
-        files: list[FileAnalysis],
-        total_files_discovered: int,
-        binary_files_skipped: int,
-        ignored_files_skipped: int,
-        execution_time_ms: float,
-    ) -> CompilationResult:
-        """Render an artifact and compute statistics from its final allocation.
-
-        Selected fidelities may be lowered to fit format overhead. Signature
-        coverage is estimated from final tiers, not measured by reparsing output.
-        """
-        root = Path(root_path).resolve()
-        content, tree = self._render_within_budget(root.name, files)
-        count = self.token_counter.count(content)
-        raw = sum(file.raw_tokens for file in files)
-        counts = dict.fromkeys((level.badge for level in FidelityLevel), 0)
-        counts.update(Counter(file.selected_fidelity.badge for file in files))
-        symbols = sum(len(file.symbols) for file in files)
-        public_signatures = sum(symbol.is_public for file in files for symbol in file.symbols)
-        preserved = sum(
-            symbol.is_public
-            for file in files
-            if file.selected_fidelity >= FidelityLevel.SIGNATURES
-            for symbol in file.symbols
-        )
-        stats = CompilationStats(
-            total_files_discovered=total_files_discovered,
-            binary_files_skipped=binary_files_skipped,
-            ignored_files_skipped=ignored_files_skipped,
-            files_compiled=len(files),
-            raw_tokens=raw,
-            compressed_tokens=count,
-            tree_overhead_tokens=min(count, self.token_counter.count(tree)),
-            budget_tokens=self.config.budget_tokens,
-            budget_utilization_pct=round(count / self.config.budget_tokens * 100, 2),
-            compression_ratio=round(raw / max(count, 1), 2) if raw else 1.0,
-            token_savings_pct=round((1 - count / raw) * 100, 2) if raw else 0.0,
-            fidelity_counts=counts,
-            total_symbols_extracted=symbols,
-            total_public_signatures=public_signatures,
-            preserved_public_signatures=preserved,
-            preserved_signatures_pct=preserved / public_signatures * 100
-            if public_signatures
-            else 100.0,
-            secrets_redacted=sum(file.redacted_secrets_count for file in files),
-            execution_time_ms=execution_time_ms,
-        )
-        return CompilationResult(str(root), self.config.output_format, content, stats, files)
-
-    def _render_within_budget(self, name: str, files: list[FileAnalysis]) -> tuple[str, str]:
-        """Return content and tree, minimizing utility lost per needed token.
-
-        Each iteration recounts the entire artifact because wrapper and escaping
-        costs differ by format. Tree-only output falls back to a minimal document.
-        """
-        optimizer = TokenBudgetOptimizer(self.config)
-        while True:
-            tree = self.render_budgeted_directory_tree(files, name)
-            content = self._render(name, files, tree)
-            overflow_tokens = self.token_counter.count(content) - self.config.budget_tokens
-            if overflow_tokens <= 0:
-                return content, tree
-
-            active = [file for file in files if file.selected_fidelity > FidelityLevel.TREE]
-            if not active:
-                return self._minimal(name, files), tree
-
-            downgrades: list[tuple[float, str, FidelityLevel, FileAnalysis]] = []
-            for file in active:
-                current_value = optimizer.tier_utility(file, file.selected_fidelity)
-                for level in FidelityLevel:
-                    if level >= file.selected_fidelity:
-                        continue
-                    saved_tokens = file.selected_tokens - file.tiers[level].tokens
-                    if level == FidelityLevel.TREE:
-                        saved_tokens += TokenBudgetOptimizer.FILE_WRAPPER_OVERHEAD_TOKENS
-                    if saved_tokens <= 0:
-                        continue
-                    loss = current_value - optimizer.tier_utility(file, level)
-                    downgrades.append(
-                        (
-                            loss / min(saved_tokens, overflow_tokens),
-                            file.rel_path,
-                            level,
-                            file,
-                        )
-                    )
-            _, _, level, file = min(downgrades, key=lambda item: item[:3])
-            file.selected_fidelity = level
-
-    def _render(self, name: str, files: list[FileAnalysis], tree: str) -> str:
-        ranked = sorted(files, key=lambda file: (-file.pagerank_score, file.rel_path))
-        active = [
-            file
-            for file in ranked
-            if file.selected_fidelity > FidelityLevel.TREE and file.selected_content.strip()
-        ]
-        counts = Counter(file.selected_fidelity.badge for file in files)
-        if self.config.output_format == OutputFormat.JSON:
-            return (
-                json.dumps(
-                    {
-                        "repository": name,
-                        "budget_tokens": self.config.budget_tokens,
-                        "focus_query": self.config.focus_query,
-                        "fidelity_summary": {
-                            level.badge: counts[level.badge] for level in FidelityLevel
-                        },
-                        "directory_tree": tree,
-                        "files": [
-                            {
-                                "path": file.rel_path,
-                                "language": file.language,
-                                "fidelity": file.selected_fidelity.badge,
-                                "pagerank_score": file.pagerank_score,
-                                "tokens": file.selected_tokens,
-                                "content": file.selected_content,
-                            }
-                            for file in active
-                        ],
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                + "\n"
-            )
-        if self.config.output_format == OutputFormat.XML:
-            root = ET.Element(
-                "repository_context",
-                name=self._xml_safe(name),
-                budget_tokens=str(self.config.budget_tokens),
-            )
-            ET.SubElement(root, "directory_tree").text = self._xml_safe(tree)
-            children = ET.SubElement(root, "files")
-            for file in active:
-                element = ET.SubElement(
-                    children,
-                    "file",
-                    {
-                        "path": self._xml_safe(file.rel_path),
-                        "language": self._xml_safe(file.language),
-                        "fidelity": file.selected_fidelity.badge,
-                        "pagerank": str(file.pagerank_score),
-                        "tokens": str(file.selected_tokens),
-                    },
-                )
-                element.text = self._xml_safe(file.selected_content)
-            return ET.tostring(root, encoding="unicode") + "\n"
-
-        lines = [
-            f"# Repository Context: `{name}`",
-            "",
-            "## Executive Summary",
-            f"- Token Budget: {self.config.budget_tokens}",
-            f"- Raw Repository Tokens: {sum(file.raw_tokens for file in files)}",
-            "- Fidelity Allocation: "
-            + " | ".join(f"{level.badge}: {counts[level.badge]}" for level in FidelityLevel),
-        ]
-        if self.config.focus_query:
-            lines.append(f"- Focus Query: {self.config.focus_query}")
-        lines += [
-            "",
-            "## Repository Directory Tree",
-            self._fence(tree),
-            tree.rstrip(),
-            self._fence(tree),
-        ]
-        if active:
-            lines += ["", "## Compiled Files (Ordered by Architectural Centrality)"]
-        for file in active:
-            fence = self._fence(file.selected_content)
-            path = file.rel_path.replace("\n", "\\n").replace("`", "\\`")
-            lines += [
-                "",
-                f"### `{path}` [{file.selected_fidelity.badge}]",
-                fence + file.language,
-                file.selected_content.rstrip("\n"),
-                fence,
-            ]
-        return "\n".join(lines) + "\n"
-
-    def _minimal(self, name: str, files: list[FileAnalysis]) -> str:
-        budget = self.config.budget_tokens
-        ranked = sorted(files, key=lambda file: (-file.pagerank_score, file.rel_path))
-        if self.config.output_format == OutputFormat.JSON:
-            payload: dict[str, Any] = {"repository": name, "files": []}
-            content = json.dumps(payload, ensure_ascii=False)
-            if self.token_counter.count(content) > budget:
-                for minimal in ("{}", "null", "0"):
-                    if self.token_counter.count(minimal) <= budget:
-                        return minimal
-                raise InvalidBudgetError("Budget too small for valid JSON")
-            paths: list[str] = []
-            for file in ranked:
-                trial = json.dumps(
-                    {"repository": name, "files": [*paths, file.rel_path]}, ensure_ascii=False
-                )
-                if self.token_counter.count(trial) <= budget:
-                    paths.append(file.rel_path)
-                    content = trial
-            return content
-        if self.config.output_format == OutputFormat.XML:
-            root = ET.Element("repository_context")
-            content = ET.tostring(root, encoding="unicode")
-            if self.token_counter.count(content) > budget:
-                raise InvalidBudgetError("Budget too small for valid XML")
-            for file in ranked:
-                child = ET.SubElement(
-                    root, "file", path=self._xml_safe(file.rel_path), fidelity="TREE"
-                )
-                trial = ET.tostring(root, encoding="unicode")
-                if self.token_counter.count(trial) > budget:
-                    root.remove(child)
-                else:
-                    content = trial
-            return content
-        content = f"# `{name}`\n"
-        if self.token_counter.count(content) > budget:
-            content = ""
-        for file in ranked:
-            trial = content + f"- {json.dumps(file.rel_path, ensure_ascii=False)} [TREE]\n"
-            if self.token_counter.count(trial) <= budget:
-                content = trial
-        return content
-
-    @staticmethod
-    def _xml_safe(content: str) -> str:
-        return re.sub(
-            r"[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]",
-            lambda match: f"\\u{ord(match[0]):04x}",
-            content,
-        )
-
-    @staticmethod
-    def _fence(content: str) -> str:
-        """Choose a Markdown fence longer than any backtick run in the content."""
-        longest_run = max((len(run) for run in re.findall(r"`+", content)), default=0)
-        return "`" * max(3, longest_run + 1)
-
-    def render_budgeted_directory_tree(
-        self, files: list[FileAnalysis], root_name: str = "."
+        index: Index,
+        tiers: Tiers,
+        file_id: int,
+        level: FidelityLevel,
+        config: Config,
     ) -> str:
-        """Use at most 10% of the budget, favoring ranked paths if the tree is too large."""
-        max_tokens = self.config.budget_tokens // 10
-        tree = self.render_directory_tree(files, root_name)
-        if self.token_counter.count(tree) <= max_tokens:
-            return tree
+        file = index.files[file_id]
+        path = file.path.relative_to(index.path).as_posix()
+        content = tiers.files[file_id][level].content
 
-        key = (root_name, max_tokens, tuple((file.rel_path, file.pagerank_score) for file in files))
-        if key == self._compact_tree_key:
-            return self._compact_tree
+        if config.output_format == OutputFormat.JSON:
+            return json.dumps(
+                {"path": path, "tier": level.name, "content": content},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
 
-        header = json.dumps(root_name, ensure_ascii=False) + "/\n"
-        lines: list[str] = []
+        if config.output_format == OutputFormat.XML:
+            element = ET.Element("file", path=path, tier=level.name)
+            element.text = content
 
-        def compact_tree(paths: list[str]) -> str:
-            omitted = len(files) - len(paths)
-            suffix = f"... {omitted} files omitted\n" if omitted else ""
-            return header + "".join(paths) + suffix
+            return ET.tostring(element, encoding="unicode")
 
-        tree = compact_tree(lines)
-        if self.token_counter.count(tree) > max_tokens:
-            return ""
-        for file in sorted(files, key=lambda item: (-item.pagerank_score, item.rel_path)):
-            line = "- " + json.dumps(file.rel_path, ensure_ascii=False) + "\n"
-            candidate = compact_tree([*lines, line])
-            if self.token_counter.count(candidate) <= max_tokens:
-                lines.append(line)
-                tree = candidate
-        self._compact_tree_key = key
-        self._compact_tree = tree
-        return tree
+        fence = "`" * max(
+            3, max((len(run) + 1 for run in re.findall(r"`+", content)), default=3)
+        )
 
-    @staticmethod
-    def render_directory_tree(files: list[FileAnalysis], root_name: str = ".") -> str:
-        tree: dict[str, Any] = {}
-        for file in sorted(files, key=lambda item: item.rel_path):
-            cursor = tree
-            parts = file.rel_path.split("/")
-            for part in parts[:-1]:
-                cursor = cursor.setdefault(part, {})
-            cursor[parts[-1]] = file
-        lines = [root_name + "/"]
+        return f"## {json.dumps(path, ensure_ascii=False)} [{level.name}]\n\n{fence}\n{content}\n{fence}\n\n"
 
-        def walk(node: dict[str, Any], prefix: str) -> None:
-            items = sorted(node.items(), key=lambda item: (not isinstance(item[1], dict), item[0]))
-            for index, (name, value) in enumerate(items):
-                last = index == len(items) - 1
-                connector = "└── " if last else "├── "
-                safe_name = name.replace("\n", "\\n")
-                if isinstance(value, dict):
-                    lines.append(prefix + connector + safe_name + "/")
-                    walk(value, prefix + ("    " if last else "│   "))
-                else:
-                    lines.append(
-                        f"{prefix}{connector}{safe_name} [{value.selected_fidelity.badge}] (PR: {value.pagerank_score:.1%})"
-                    )
+    def file_cost(
+        self,
+        index: Index,
+        tiers: Tiers,
+        file_id: int,
+        level: FidelityLevel,
+        counter: TokenCounter,
+        config: Config,
+    ) -> int:
+        """Return a file's token cost at the requested tier, including framing.
 
-        walk(tree, "")
-        return "\n".join(lines) + "\n"
+        TREE costs zero because paths have a separate budget. JSON costs include
+        a trailing comma. Use the same counter and config as for the final output,
+        but note that joining blocks may change how they tokenize.
+        """
+        if level == FidelityLevel.TREE:
+            return 0
+
+        block = self._render_file(index, tiers, file_id, level, config)
+
+        return counter.count(
+            block + ("," if config.output_format == OutputFormat.JSON else "")
+        )
+
+    def render(
+        self,
+        index: Index,
+        tiers: Tiers,
+        selections: dict[int, FidelityLevel],
+        tree: tuple[str, ...],
+        config: Config,
+    ) -> str:
+        """Serialize selected tiers and a caller-supplied path listing.
+
+        Args:
+            index: File metadata and repository root for relative paths.
+            tiers: Content available at each selected tier.
+            selections: File IDs and fidelity levels to emit. TREE emits no block.
+            tree: Relative paths to list, normally from directory_tree.
+            config: Output format to use.
+
+        Returns:
+            Serialized context without token-budget validation. Paths not
+            listed in tree are counted in the omitted-path total.
+        """
+        blocks = [
+            self._render_file(index, tiers, file_id, level, config)
+            for file_id, level in sorted(selections.items())
+            if level != FidelityLevel.TREE
+        ]
+
+        omitted = len(index.files) - len(tree)
+
+        if config.output_format == OutputFormat.JSON:
+            header = json.dumps(
+                {"tree": tree, "omitted_paths": omitted},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+
+            return header[:-1] + ',"files":[' + ",".join(blocks) + "]}"
+
+        if config.output_format == OutputFormat.XML:
+            element = ET.Element("tree", omitted_paths=str(omitted))
+
+            for path in tree:
+                ET.SubElement(element, "file", path=path)
+
+            return (
+                "<repository_context>"
+                + ET.tostring(element, encoding="unicode")
+                + "<files>"
+                + "".join(blocks)
+                + "</files></repository_context>"
+            )
+
+        listing = "".join(
+            f"- {json.dumps(path, ensure_ascii=False)}\n" for path in tree
+        )
+
+        if omitted:
+            listing += f"- {omitted} paths omitted\n"
+
+        return (
+            "# Repository context\n\n"
+            + listing
+            + ("\n" if listing else "")
+            + "".join(blocks)
+        )
+
+    def directory_tree(
+        self, index: Index, tiers: Tiers, counter: TokenCounter, config: Config
+    ) -> tuple[str, ...]:
+        """List relative paths in file-ID order until the tree budget is reached.
+
+        The listing uses at most one tenth of config.budget_tokens beyond the
+        cost of empty output framing, as measured by the supplied counter and
+        format. Use tiers from the same index. The listing contains no file content.
+        """
+        paths = tuple(
+            file.path.relative_to(index.path).as_posix()
+            for _, file in sorted(index.files.items())
+        )
+
+        baseline = counter.count(self.render(index, tiers, {}, (), config))
+        limit = config.budget_tokens // 10
+        low, high = 0, len(paths)
+
+        while low < high:
+            middle = (low + high + 1) // 2
+            cost = (
+                counter.count(self.render(index, tiers, {}, paths[:middle], config))
+                - baseline
+            )
+
+            if cost <= limit:
+                low = middle
+            else:
+                high = middle - 1
+
+        return paths[:low]
+
+    def format(
+        self,
+        index: Index,
+        tiers: Tiers,
+        scores: dict[int, float],
+        selection: Selection,
+        config: Config,
+    ) -> Artifact:
+        """Format selected tiers, lowering fidelity as needed to fit the budget.
+
+        Args:
+            index: Repository files to include in the allocation.
+            tiers: Available content for each indexed file.
+            scores: File weights used to choose downgrades with less utility loss.
+            selection: Initial tier for every indexed file; left unchanged.
+            config: Output format, token budget, and tokenizer options.
+
+        Returns:
+            An artifact with the final content, token count, and selected tiers.
+            To fit the budget, the formatter may lower file tiers or shorten the
+            path listing. Counts are exact unless token_counts_estimated is true.
+
+        Raises:
+            ValueError: If selection does not cover exactly the indexed files,
+                or even empty output framing exceeds the budget.
+        """
+        if set(selection.tiers) != set(index.files):
+            raise ValueError("Allocate file tiers before formatting")
+
+        counter = TokenCounter(
+            config.tokenizer_encoding,
+            allow_estimates=config.allow_token_estimates,
+        )
+
+        selections = dict(selection.tiers)
+        tree = self.directory_tree(index, tiers, counter, config)
+        costs = {
+            file_id: {
+                level: self.file_cost(index, tiers, file_id, level, counter, config)
+                for level in tiers.files[file_id]
+            }
+            for file_id in index.files
+        }
+
+        while True:
+            content = self.render(index, tiers, selections, tree, config)
+            tokens = counter.count(content)
+
+            if tokens <= config.budget_tokens:
+                break
+
+            downgrades = []
+
+            for file_id, current in selections.items():
+                for level in tiers.files[file_id]:
+                    savings = costs[file_id][current] - costs[file_id][level]
+
+                    if level < current and savings > 0:
+                        loss = scores[file_id] * (
+                            current.semantic_utility - level.semantic_utility
+                        )
+
+                        downgrades.append((loss / savings, loss, file_id, level))
+
+            if downgrades:
+                _, _, file_id, level = min(downgrades)
+                selections[file_id] = level
+            elif tree:
+                tree = tree[: len(tree) // 2]
+            else:
+                raise ValueError("Token budget is too small for the output framing")
+
+        estimated = (
+            tiers.token_counts_estimated
+            or selection.token_counts_estimated
+            or counter.used_estimates
+        )
+
+        return Artifact(
+            content=content,
+            tokens=tokens,
+            token_counts_estimated=estimated,
+            selected_tiers=selections,
+        )

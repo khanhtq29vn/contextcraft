@@ -1,160 +1,138 @@
-# Results and AST Models
+# Results and Pipeline Models
 
-Unless a module path is shown, the types on this page can be imported directly
-from `contextcraft`.
+Import these types from `contextcraft.models`. They are keyword-only, frozen
+`msgspec.Struct` records, except for the `FidelityLevel` enum. Frozen records
+prevent field reassignment; their nested dictionaries remain mutable.
 
-## Compilation results
-
-```{eval-rst}
-.. autoclass:: contextcraft.CompilationResult
-   :members: markdown, text_content
-   :undoc-members:
-```
-
-| Field           | Meaning                                                     |
-| :-------------- | :---------------------------------------------------------- |
-| `root_path`     | Resolved repository root as a string                        |
-| `output_format` | Selected `OutputFormat`                                     |
-| `content`       | Complete formatted artifact                                 |
-| `stats`         | `CompilationStats` for this compilation                     |
-| `files`         | Analyzed files, including files selected at `TREE` fidelity |
-
-`markdown` and `text_content` are aliases for `content`, not format converters.
+## Artifact
 
 ```{eval-rst}
-.. autoclass:: contextcraft.OutputFormat
-   :members:
-   :undoc-members:
+.. autoclass:: contextcraft.models.Artifact
 ```
 
-## Statistics
+`ContextCraft.compile()` returns an `Artifact` with these fields:
 
-`CompilationStats` is a Pydantic model with the following fields. Use
-`result.stats.model_dump()` for a dictionary or `model_dump_json()` for JSON.
+| Field                    | Meaning                                                                    |
+| :----------------------- | :------------------------------------------------------------------------- |
+| `content`                | Complete Markdown, XML, or JSON output                                     |
+| `tokens`                 | Token count of the complete output, including framing and the path listing |
+| `token_counts_estimated` | Whether any pipeline token count used an estimate                          |
+| `selected_tiers`         | Final fidelity level for every indexed file ID                             |
 
-| Field                         | Meaning                                                        |
-| :---------------------------- | :------------------------------------------------------------- |
-| `total_files_discovered`      | Files discovered during scanning                               |
-| `binary_files_skipped`        | Files skipped as binary                                        |
-| `ignored_files_skipped`       | Files skipped by filtering or scan constraints                 |
-| `files_compiled`              | Number of analyzed files, including `TREE` selections          |
-| `raw_tokens`                  | Sum of the analyzed files' `FULL` tier token counts            |
-| `compressed_tokens`           | Token count of the complete formatted artifact                 |
-| `tree_overhead_tokens`        | Token count of the directory tree                              |
-| `budget_tokens`               | Requested token budget                                         |
-| `budget_utilization_pct`      | Artifact tokens divided by budget, times 100                   |
-| `compression_ratio`           | Raw tokens divided by artifact tokens (1.0 if no raw tokens)   |
-| `token_savings_pct`           | Percentage reduction from raw tokens to artifact tokens        |
-| `fidelity_counts`             | File counts by fidelity badge (`TREE`, `SIGS`, `SKEL`, `FULL`) |
-| `total_symbols_extracted`     | Number of extracted symbols                                    |
-| `total_public_signatures`     | Number of public symbols                                       |
-| `preserved_public_signatures` | Public symbols in files selected at `SIGS` or higher           |
-| `preserved_signatures_pct`    | Fidelity-based public-symbol retention estimate, times 100     |
-| `secrets_redacted`            | Number of detected secrets redacted                            |
-| `execution_time_ms`           | Compilation duration in milliseconds                           |
+`selected_tiers` includes any downgrades made during formatting. The artifact
+does not contain the index or per-file scores; use the individual pipeline
+stages to retain those records.
 
-Raw tokens are counted after redaction. Artifact counts include formatting
-overhead, so token savings can be negative for small inputs.
+If `token_counts_estimated` is false, the output count is exact for the configured
+tokenizer. If true, the count is approximate and the exact-budget guarantee does
+not apply.
 
-## File analysis
+## Fidelity and rendered tiers
 
 ```{eval-rst}
-.. autoclass:: contextcraft.FileAnalysis
-   :members: symbols, imports, defined_identifiers, referenced_identifiers, raw_tokens, tier_tokens, selected_content, selected_tokens, redacted_secrets_count
-   :undoc-members:
+.. autoclass:: contextcraft.models.FidelityLevel
+   :members: TREE, SIGS, SKEL, FULL, semantic_utility
 ```
 
-`parsed` holds the byte-backed AST. `tiers` maps `FidelityLevel` to
-`RenderedTier`. `pagerank_score` and `relevance_boost` describe ranking;
-`selected_fidelity` identifies the tier chosen for output. `imports` returns
-import declaration text, while `parsed.imports` contains structured `Import`
-objects. `redacted_secrets` contains `SecretMatch` records.
+| Level  | Value | Utility | Content                                                      |
+| :----- | :---- | :------ | :----------------------------------------------------------- |
+| `TREE` | `0`   | `0.0`   | No file content; its path may appear in the budgeted listing |
+| `SIGS` | `1`   | `0.45`  | Declaration outline                                          |
+| `SKEL` | `2`   | `0.82`  | Declaration outline with retained documentation              |
+| `FULL` | `3`   | `1.0`   | Full loaded source after optional redaction                  |
 
-## Fidelity and token counting
+Utilities weight tier upgrades during allocation. Rendered content depends on
+the language implementation; an outline need not be executable source.
 
 ```{eval-rst}
-.. autoclass:: contextcraft.FidelityLevel
-   :members:
-   :undoc-members:
+.. autoclass:: contextcraft.models.RenderedTier
+
+.. autoclass:: contextcraft.models.Tiers
+
+.. autoclass:: contextcraft.models.Selection
 ```
 
-| Level        | Value | Content                                                |
-| :----------- | :---- | :----------------------------------------------------- |
-| `TREE`       | `0`   | Empty file content; path remains in the directory tree |
-| `SIGNATURES` | `1`   | Language-specific signatures or compact summary        |
-| `SKELETON`   | `2`   | Structural representation with implementation elided   |
-| `FULL`       | `3`   | Full source after optional redaction                   |
+- `RenderedTier.content` is file text. `tokens` counts that text without output
+  framing.
+- `Tiers.files` maps each file ID to its available `FidelityLevel` and
+  `RenderedTier` pairs. Every indexed file has a zero-content, zero-token `TREE`
+  tier. Files rejected during loading have no higher tiers.
+- `Selection.tiers` maps file IDs to the levels chosen by the allocator, before
+  the formatter's final budget check.
+- `Tiers.token_counts_estimated` and `Selection.token_counts_estimated` record
+  whether token counting used an estimate.
+
+For loaded files without a detected language, `SIGS` and `SKEL` reuse full
+source. Empty compressed renderings, or renderings larger than the next richer
+tier, also reuse that richer tier.
+
+## Index and files
 
 ```{eval-rst}
-.. autoclass:: contextcraft.RenderedTier
+.. py:class:: contextcraft.models.Index(*, path: pathlib.Path, languages=..., modules=..., files=..., focus_file_ids=frozenset())
+
+   Store repository files, project roots, detected language implementations,
+   and focus matches. Mapping fields default to new empty dictionaries.
+
+.. autoclass:: contextcraft.models.ModuleRoot
+
+.. autoclass:: contextcraft.models.File
 ```
 
-`content` is the rendered text and `tokens` is its token count.
+| Record       | Field            | Meaning                                                      |
+| :----------- | :--------------- | :----------------------------------------------------------- |
+| `Index`      | `path`           | Resolved repository root as a `Path`                         |
+| `Index`      | `languages`      | Detected language IDs mapped to their implementation classes |
+| `Index`      | `modules`        | Module IDs mapped to `ModuleRoot` records                    |
+| `Index`      | `files`          | File IDs mapped to `File` records                            |
+| `Index`      | `focus_file_ids` | Frozen set of file IDs matched by focus patterns             |
+| `ModuleRoot` | `path`           | Absolute project-root path                                   |
+| `File`       | `path`           | Absolute source-file path                                    |
+| `File`       | `module_id`      | ID of the nearest owning project root                        |
+| `File`       | `language_id`    | Detected language ID, or `None` for an unrecognized file     |
+
+File and module IDs belong to one index and must not be mixed across analyses.
+`Index.languages` contains only implementations detected among indexed files.
+Later language-dependent stages require this mapping for non-null language IDs.
+
+## Loaded source
 
 ```{eval-rst}
-.. autoclass:: contextcraft.TokenCounter
-   :members: count
-   :undoc-members:
+.. autoclass:: contextcraft.models.Source
 ```
 
-Uses the requested tiktoken encoding. An unknown encoding raises `ValueError`.
-If tokenization is unavailable or fails, counting falls back to a lexical/byte
-estimate.
+`Source` contains:
+
+- `content`: file IDs mapped to loaded UTF-8 bytes.
+- `docstrings`: file IDs mapped to tuples of extracted docstring values.
+- `imports`: a tuple of structured import records.
+
+Files that exceed the configured size limit, contain binary control bytes, or
+cannot be decoded as UTF-8 have no `content` entry. They remain in the index.
+When redaction is enabled, loaded bytes are masked before metadata extraction;
+masking preserves byte offsets and line endings. No secret-match metadata is
+returned.
+
+## Imports and resolutions
 
 ```{eval-rst}
-.. autoclass:: contextcraft.Elider
-   :members: render
-   :undoc-members:
+.. autoclass:: contextcraft.models.Import
+
+.. autoclass:: contextcraft.models.ImportResolution
 ```
 
-`render()` produces all four tiers. Empty compressed output or a compressed
-tier larger than the next richer tier falls back to that richer tier. A custom
-counter only needs a `count(text: str) -> int` method, as specified by
-`contextcraft.elider.TokenCounterProtocol`.
+| Record             | Field                | Meaning                                                           |
+| :----------------- | :------------------- | :---------------------------------------------------------------- |
+| `Import`           | `source_file_id`     | ID of the importing file in `Index.files`                         |
+| `Import`           | `module_name`        | Imported module name without leading relative dots                |
+| `Import`           | `relative_level`     | Number of leading relative-import dots; zero for absolute imports |
+| `Import`           | `imported_names`     | Names requested by a from-import; `("*",)` for a wildcard         |
+| `ImportResolution` | `import_id`          | Position of the import in `Source.imports`                        |
+| `ImportResolution` | `target_file_ids`    | Definite target file IDs                                          |
+| `ImportResolution` | `ambiguous_file_ids` | Candidate file IDs that could not be resolved uniquely            |
+| `ImportResolution` | `unresolved_names`   | Names that were not resolved to indexed files                     |
 
-## AST data
-
-All ranges are half-open UTF-8 **byte offsets**, not character indexes. Use
-`ParsedAst.text()` rather than slicing a decoded Python string with them.
-When redaction is enabled, ranges refer to the sanitized source.
-
-```{eval-rst}
-.. autoclass:: contextcraft.ByteRange
-```
-
-```{eval-rst}
-.. autoclass:: contextcraft.Symbol
-   :members: qualified_name
-   :undoc-members:
-```
-
-A symbol describes its declaration, signature, optional body and docstring,
-parent, and public visibility. `qualified_name` joins named parents with dots;
-it is `None` for unnamed symbols.
-
-```{eval-rst}
-.. autoclass:: contextcraft.Import
-```
-
-```{eval-rst}
-.. autoclass:: contextcraft.ParsedAst
-   :members: text, defined_identifiers, referenced_identifiers
-   :undoc-members:
-```
-
-`source` is UTF-8 bytes. `symbols`, `imports`, and `scope_graph` contain extracted
-structure. `has_errors` records parsing problems. `embedded_regions` contains
-`contextcraft.ast.EmbeddedRegion` values with a source range, language class,
-and a separately parsed AST; ranges inside that AST are local to its source.
-
-## Secret metadata
-
-`SecretMatch` is a frozen Pydantic model. It records `kind` (`SecretKind`), a
-one-based `line_number`, `redacted_placeholder`, and `masked_preview` rather
-than the original secret value.
-
-```{eval-rst}
-.. autoclass:: contextcraft.SecretKind
-   :members:
-   :undoc-members:
-```
+A resolution may include both definite targets and unresolved names. An
+unresolved name can refer to an external dependency or an attribute rather than
+a missing file. The dependency graph uses only definite targets; it omits
+self-imports and merges repeated edges between the same files.

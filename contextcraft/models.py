@@ -1,207 +1,139 @@
+"""Define records exchanged between repository pipeline stages."""
+
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
+from enum import IntEnum
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+import msgspec
 
-from contextcraft.ast import ParsedAst, Symbol
-from contextcraft.elider import FidelityLevel, RenderedTier
+if TYPE_CHECKING:
+    from contextcraft.languages.base import Language
 
-
-class StrEnum(str, Enum):
-    def __str__(self) -> str:
-        return str(self.value)
+SEMANTIC_UTILITIES = (0.0, 0.45, 0.82, 1.0)
 
 
-class ContextCraftError(Exception):
-    pass
+class FidelityLevel(IntEnum):
+    """Order file representations from path-only to full source."""
 
-
-class RepositoryNotFoundError(ContextCraftError):
-    pass
-
-
-class InvalidBudgetError(ContextCraftError):
-    pass
-
-
-class ASTParseError(ContextCraftError):
-    pass
-
-
-class CompilationError(ContextCraftError):
-    pass
-
-
-class OutputFormat(StrEnum):
-    MARKDOWN = "markdown"
-    XML = "xml"
-    JSON = "json"
-
-
-class SecretKind(StrEnum):
-    AWS_ACCESS_KEY = "AWS_ACCESS_KEY"
-    GITHUB_TOKEN = "GITHUB_TOKEN"
-    OPENAI_API_KEY = "OPENAI_API_KEY"
-    ANTHROPIC_API_KEY = "ANTHROPIC_API_KEY"
-    GOOGLE_API_KEY = "GOOGLE_API_KEY"
-    SLACK_TOKEN = "SLACK_TOKEN"
-    STRIPE_KEY = "STRIPE_KEY"
-    HUGGINGFACE_TOKEN = "HUGGINGFACE_TOKEN"
-    NPM_TOKEN = "NPM_TOKEN"
-    DATABRICKS_TOKEN = "DATABRICKS_TOKEN"
-    JWT = "JWT"
-    BEARER_TOKEN = "BEARER_TOKEN"
-    CONNECTION_STRING_PASSWORD = "CONNECTION_STRING_PASSWORD"
-    PRIVATE_KEY_BLOCK = "PRIVATE_KEY_BLOCK"
-    GENERIC_HIGH_ENTROPY = "GENERIC_SECRET"
-    ENV_SECRET_ASSIGNMENT = "ENV_SECRET"
-
-
-class SecretMatch(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    kind: SecretKind
-    line_number: int = Field(ge=1)
-    redacted_placeholder: str
-    masked_preview: str = Field()
-
-
-_BUDGET_SHORTHAND_RE = re.compile(r"(\d+(?:\.\d+)?)\s*([kKmM]?)")
-
-
-class CompilationConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
-    budget_tokens: int = Field(default=32000, gt=0)
-    focus_query: str | None = Field(default=None)
-    focus_files: list[str] = Field(default_factory=list)
-    output_format: OutputFormat = Field(default=OutputFormat.MARKDOWN)
-    include_patterns: list[str] = Field(default_factory=list)
-    exclude_patterns: list[str] = Field(default_factory=list)
-    respect_gitignore: bool = Field(default=True)
-    redact_secrets: bool = Field(default=True)
-    max_file_size_bytes: int = Field(default=1048576, gt=0)
-    tokenizer_encoding: str = Field(default="cl100k_base")
-
-    @field_validator("budget_tokens", mode="before")
-    @classmethod
-    def _coerce_budget_shorthand(cls, value: Any) -> int:
-        return cls.parse_budget(value)
-
-    @classmethod
-    def parse_budget(cls, raw_budget: str | int) -> int:
-        if isinstance(raw_budget, bool) or not isinstance(raw_budget, (str, int)):
-            raise InvalidBudgetError(f"Unsupported budget type: {type(raw_budget).__name__}")
-        if isinstance(raw_budget, int):
-            if raw_budget <= 0:
-                raise InvalidBudgetError(f"Token budget must be positive, got {raw_budget}.")
-            return raw_budget
-        match = _BUDGET_SHORTHAND_RE.fullmatch(raw_budget.strip())
-        if not match:
-            raise InvalidBudgetError(
-                f"Invalid token budget format '{raw_budget}'. Examples: '16k', '32000', '128k'."
-            )
-        amount_str, suffix = match.groups()
-        whole, _, fractional = amount_str.partition(".")
-        multiplier = 1
-        if suffix.lower() == "k":
-            multiplier = 1000
-        elif suffix.lower() == "m":
-            multiplier = 1000000
-        computed = int(whole) * multiplier
-        if fractional:
-            computed += int(fractional) * multiplier // (10 ** len(fractional))
-        if computed <= 0:
-            raise InvalidBudgetError(f"Token budget must be > 0, got {computed}.")
-        return computed
-
-
-class CompilationStats(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    total_files_discovered: int = Field(ge=0)
-    binary_files_skipped: int = Field(default=0, ge=0)
-    ignored_files_skipped: int = Field(default=0, ge=0)
-    files_compiled: int = Field(ge=0)
-    raw_tokens: int = Field(ge=0)
-    compressed_tokens: int = Field(ge=0)
-    tree_overhead_tokens: int = Field(default=0, ge=0)
-    budget_tokens: int = Field(gt=0)
-    budget_utilization_pct: float = Field(ge=0.0)
-    compression_ratio: float = Field(ge=0.0)
-    token_savings_pct: float = Field()
-    fidelity_counts: dict[str, int] = Field(default_factory=dict)
-    total_symbols_extracted: int = Field(default=0, ge=0)
-    total_public_signatures: int = Field(default=0, ge=0)
-    preserved_public_signatures: int = Field(default=0, ge=0)
-    preserved_signatures_pct: float = Field(default=100.0, ge=0.0, le=100.0)
-    secrets_redacted: int = Field(default=0, ge=0)
-    execution_time_ms: float = Field(ge=0.0)
-
-
-@dataclass
-class FileAnalysis:
-    rel_path: str
-    abs_path: str
-    language: str
-    size_bytes: int
-    parsed: ParsedAst
-    tiers: dict[FidelityLevel, RenderedTier] = field(default_factory=dict)
-    pagerank_score: float = 0.0
-    relevance_boost: float = 1.0
-    selected_fidelity: FidelityLevel = FidelityLevel.TREE
-    redacted_secrets: list[SecretMatch] = field(default_factory=list)
+    TREE = 0
+    SIGS = 1
+    SKEL = 2
+    FULL = 3
 
     @property
-    def symbols(self) -> list[Symbol]:
-        return self.parsed.symbols
-
-    @property
-    def imports(self) -> list[str]:
-        return [self.parsed.text(item.declaration_range) for item in self.parsed.imports]
-
-    @property
-    def defined_identifiers(self) -> list[str]:
-        return self.parsed.defined_identifiers
-
-    @property
-    def referenced_identifiers(self) -> list[str]:
-        return self.parsed.referenced_identifiers
-
-    @property
-    def raw_tokens(self) -> int:
-        return self.tiers[FidelityLevel.FULL].tokens
-
-    @property
-    def tier_tokens(self) -> dict[FidelityLevel, int]:
-        return {level: tier.tokens for level, tier in self.tiers.items()}
-
-    @property
-    def selected_content(self) -> str:
-        return self.tiers[self.selected_fidelity].content
-
-    @property
-    def selected_tokens(self) -> int:
-        return self.tiers[self.selected_fidelity].tokens
-
-    @property
-    def redacted_secrets_count(self) -> int:
-        return len(self.redacted_secrets)
+    def semantic_utility(self) -> float:
+        """Return the relative utility used to score tier upgrades."""
+        return SEMANTIC_UTILITIES[self]
 
 
-@dataclass
-class CompilationResult:
-    root_path: str
-    output_format: OutputFormat
+class RenderedTier(msgspec.Struct, frozen=True, kw_only=True):
+    """Store rendered file content and its unframed token count."""
+
     content: str
-    stats: CompilationStats
-    files: list[FileAnalysis]
+    tokens: int
 
-    @property
-    def markdown(self) -> str:
-        return self.content
 
-    @property
-    def text_content(self) -> str:
-        return self.content
+class Artifact(msgspec.Struct, frozen=True, kw_only=True):
+    """Store the final output, token count, and selected file tiers.
+
+    The selected_tiers mapping includes any budget adjustments made by the
+    formatter. If token_counts_estimated is true, tokens is only an estimate.
+    """
+
+    content: str
+    tokens: int
+    token_counts_estimated: bool = False
+    selected_tiers: dict[int, FidelityLevel] = msgspec.field(default_factory=dict)
+
+
+class ModuleRoot(msgspec.Struct, frozen=True, kw_only=True):
+    """Identify a project root used to group files for import resolution."""
+
+    path: Path
+
+
+class File(msgspec.Struct, frozen=True, kw_only=True):
+    """Record an absolute file path, owning module ID, and detected language."""
+
+    path: Path
+    module_id: int
+    language_id: str | None = None
+
+
+class Import(msgspec.Struct, frozen=True, kw_only=True):
+    """Describe an import found in a source file.
+
+    Use source_file_id to look up the importing file in Index.files.
+    The relative_level counts leading dots, and imported_names holds the names
+    requested by a from-import, including '*' for a wildcard.
+    """
+
+    source_file_id: int
+    module_name: str
+    relative_level: int = 0
+    imported_names: tuple[str, ...] = ()
+
+
+class ImportResolution(msgspec.Struct, frozen=True, kw_only=True):
+    """Record targets, ambiguities, and unresolved names for one import.
+
+    The import_id is the record's position in Source.imports. Both target
+    and ambiguous file IDs refer to Index.files. An unresolved name may be
+    an external dependency or an attribute that requires symbol analysis.
+    """
+
+    import_id: int
+    target_file_ids: tuple[int, ...] = ()
+    ambiguous_file_ids: tuple[int, ...] = ()
+    unresolved_names: tuple[str, ...] = ()
+
+
+class Index(msgspec.Struct, frozen=True, kw_only=True):
+    """Store the repository root, project roots, files, and focus matches.
+
+    Module and file IDs belong to this index, and all paths are absolute.
+    The focus_file_ids set contains files matched by the focus patterns.
+    The languages mapping connects detected language IDs to implementations
+    for later stages; it omits languages with no matching files.
+    """
+
+    path: Path
+    languages: dict[str, type[Language]] = msgspec.field(default_factory=dict)
+    modules: dict[int, ModuleRoot] = msgspec.field(default_factory=dict)
+    files: dict[int, File] = msgspec.field(default_factory=dict)
+    focus_file_ids: frozenset[int] = frozenset()
+
+
+class Source(msgspec.Struct, frozen=True, kw_only=True):
+    """Store loaded UTF-8 source bytes, docstrings, and import records.
+
+    Content and docstrings are keyed by file ID. Files skipped by the loader
+    have no content entry. Source bytes are already redacted when that option
+    is enabled.
+    """
+
+    content: dict[int, bytes] = msgspec.field(default_factory=dict)
+    docstrings: dict[int, tuple[str, ...]] = msgspec.field(default_factory=dict)
+    imports: tuple[Import, ...] = ()
+
+
+class Tiers(msgspec.Struct, frozen=True, kw_only=True):
+    """Store available fidelity tiers by file ID.
+
+    Every file has a TREE tier, but only files with loaded source have higher
+    tiers. The token_counts_estimated flag is true if any count used an estimate.
+    """
+
+    files: dict[int, dict[FidelityLevel, RenderedTier]] = msgspec.field(
+        default_factory=dict
+    )
+    token_counts_estimated: bool = False
+
+
+class Selection(msgspec.Struct, frozen=True, kw_only=True):
+    """Record the allocated tier for each file and whether token counts were estimated."""
+
+    tiers: dict[int, FidelityLevel] = msgspec.field(default_factory=dict)
+    token_counts_estimated: bool = False

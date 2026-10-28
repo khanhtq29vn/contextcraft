@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality-and-tests:
-    name: Quality & Pytest (${{ matrix.os }}, Python ${{ matrix.python-version }})
+  quality:
+    name: Quality (${{ matrix.os }}, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -23,27 +23,21 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+      UV_LOCKED: "true"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+      - name: Install just and uv
+        uses: taiki-e/install-action@v2
         with:
-          enable-cache: true
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+          tool: just,uv
 
       - name: Install dependencies
-        run: uv sync --locked --all-extras --dev
+        run: just init
 
-      - name: Run Ruff linter
-        run: uv run ruff check contextcraft tests web benchmarks
-
-      - name: Run Mypy strict type checker
-        run: uv run mypy contextcraft
-
-      - name: Run Pytest suite with coverage
-        run: uv run pytest --cov=contextcraft --cov-report=term-missing
+      - name: Run quality checks
+        run: just lint

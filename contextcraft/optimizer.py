@@ -1,227 +1,126 @@
+"""Allocate fidelity tiers using file scores and framed token costs."""
+
 from __future__ import annotations
 
 import heapq
-from bisect import bisect_right
-from dataclasses import dataclass
+import math
 
-from contextcraft.elider import FidelityLevel
-from contextcraft.models import CompilationConfig, FileAnalysis
-
-
-@dataclass(frozen=True, slots=True)
-class _MarginalUpgrade:
-    to_level: FidelityLevel
-    delta_utility: float
-    delta_tokens: int
-    density: float
+from contextcraft.config import Config
+from contextcraft.formatter import ArtifactFormatter
+from contextcraft.models import FidelityLevel, Index, Selection, Tiers
+from contextcraft.tiers import TokenCounter
 
 
-@dataclass(slots=True)
-class BudgetAllocationSummary:
-    """Estimated allocation costs before format-specific budget verification."""
+class BudgetAllocator:
+    """Choose tier upgrades by weighing their utility against their token cost."""
 
-    budget_tokens: int
-    tree_overhead_tokens: int
-    net_code_budget: int
-    allocated_code_tokens: int
-    total_estimated_tokens: int
-    objective_score: float
+    def allocate(
+        self, index: Index, tiers: Tiers, scores: dict[int, float], config: Config
+    ) -> Selection:
+        """Allocate one available fidelity tier to every indexed file.
 
+        Args:
+            index: Files to allocate.
+            tiers: Rendered tiers for exactly the indexed files.
+            scores: Finite, nonnegative weights for exactly the indexed files.
+            config: Positive token budget, output format, and tokenizer options.
 
-class TokenBudgetOptimizer:
-    """Allocate whole-file fidelity tiers using PageRank-weighted utility.
+        Returns:
+            A selection based on estimated framing overhead and marginal
+            utility. Pass it to ArtifactFormatter.format to check the complete
+            output against the budget; allocation alone does not guarantee a fit.
 
-    Greedy marginal upgrades and bounded pairwise swaps approximate the
-    multiple-choice knapsack objective; they do not guarantee a global optimum.
-    Wrapper costs are estimates. ArtifactFormatter enforces the emitted budget.
-    """
-
-    FILE_WRAPPER_OVERHEAD_TOKENS: int = 18
-    BASE_DOCUMENT_OVERHEAD_TOKENS: int = 115
-    PER_FILE_TREE_ENTRY_TOKENS: int = 9
-    _ORDERED_TIERS: tuple[FidelityLevel, ...] = (
-        FidelityLevel.TREE,
-        FidelityLevel.SIGNATURES,
-        FidelityLevel.SKELETON,
-        FidelityLevel.FULL,
-    )
-
-    def __init__(self, config: CompilationConfig | None = None) -> None:
-        self.config = config or CompilationConfig()
-
-    def optimize(
-        self, files: list[FileAnalysis], tree_overhead_tokens: int | None = None
-    ) -> BudgetAllocationSummary:
-        """Reset and mutate selected fidelities, leaving source and tiers intact.
-
-        Tree overhead includes document framing. If it exhausts the budget,
-        all files remain TREE and the formatter handles the remaining overflow.
+        Raises:
+            ValueError: If the budget, file coverage, scores, or TREE tiers
+                are invalid, or output framing cannot fit the budget.
         """
-        budget = self.config.budget_tokens
-        if not files:
-            return BudgetAllocationSummary(
-                budget_tokens=budget,
-                tree_overhead_tokens=0,
-                net_code_budget=budget,
-                allocated_code_tokens=0,
-                total_estimated_tokens=0,
-                objective_score=0.0,
-            )
-        estimated_tree_overhead = (
-            tree_overhead_tokens
-            if tree_overhead_tokens is not None
-            else self.estimate_tree_overhead(len(files))
-        )
-        for file_obj in files:
-            file_obj.selected_fidelity = FidelityLevel.TREE
-        net_budget = max(0, budget - estimated_tree_overhead)
-        used_tokens = 0
-        if net_budget > 0:
-            total_full_cost = sum(
-                self._effective_tier_cost(file, FidelityLevel.FULL) for file in files
-            )
-            if total_full_cost <= net_budget:
-                for file in files:
-                    file.selected_fidelity = FidelityLevel.FULL
-                used_tokens = total_full_cost
-            else:
-                used_tokens = self._greedy_marginal_allocation(files, net_budget)
-                used_tokens = self._local_search_refinement(files, used_tokens, net_budget)
-                used_tokens = self._greedy_marginal_allocation(files, net_budget, used_tokens)
+        if config.budget_tokens <= 0:
+            raise ValueError("Token budget must be positive")
 
-        return BudgetAllocationSummary(
-            budget_tokens=budget,
-            tree_overhead_tokens=estimated_tree_overhead,
-            net_code_budget=net_budget,
-            allocated_code_tokens=used_tokens,
-            total_estimated_tokens=estimated_tree_overhead + used_tokens,
-            objective_score=self._compute_total_objective(files),
+        if set(tiers.files) != set(index.files) or set(scores) != set(index.files):
+            raise ValueError("Render tiers and score all files before allocation")
+
+        if any(not math.isfinite(score) or score < 0 for score in scores.values()):
+            raise ValueError("File scores must be finite and nonnegative")
+
+        counter = TokenCounter(
+            config.tokenizer_encoding,
+            allow_estimates=config.allow_token_estimates,
         )
 
-    @classmethod
-    def estimate_tree_overhead(cls, num_files: int) -> int:
-        return cls.BASE_DOCUMENT_OVERHEAD_TOKENS + num_files * cls.PER_FILE_TREE_ENTRY_TOKENS
+        formatter = ArtifactFormatter()
+        selected = dict.fromkeys(index.files, FidelityLevel.TREE)
+        tree = formatter.directory_tree(index, tiers, counter, config)
+        overhead = counter.count(formatter.render(index, tiers, selected, tree, config))
 
-    @classmethod
-    def _effective_tier_cost(cls, file_obj: FileAnalysis, level: FidelityLevel) -> int:
-        if level == FidelityLevel.TREE:
-            return 0
-        tier = file_obj.tiers.get(level)
-        raw_tier_cost = tier.tokens if tier is not None else 0
-        if raw_tier_cost <= 0:
-            return 0
-        return raw_tier_cost + cls.FILE_WRAPPER_OVERHEAD_TOKENS
+        while tree and overhead > config.budget_tokens:
+            tree = tree[: len(tree) // 2]
+            overhead = counter.count(
+                formatter.render(index, tiers, selected, tree, config)
+            )
 
-    @staticmethod
-    def tier_utility(file_obj: FileAnalysis, level: FidelityLevel) -> float:
-        return file_obj.pagerank_score * level.semantic_utility
+        if overhead > config.budget_tokens:
+            raise ValueError("Token budget is too small for the output framing")
 
-    def _greedy_marginal_allocation(
-        self, files: list[FileAnalysis], net_budget: int, used_tokens: int = 0
-    ) -> int:
-        """Apply affordable upgrades by utility gained per token; return total cost."""
-        upgrades: list[tuple[float, float, int, int, _MarginalUpgrade]] = []
+        available = config.budget_tokens - overhead
+        costs = {}
 
-        def enqueue_upgrade(index: int, available: int) -> None:
-            file = files[index]
-            current_level = file.selected_fidelity
-            current_cost = self._effective_tier_cost(file, current_level)
-            current_value = self.tier_utility(file, current_level)
-            candidates: list[_MarginalUpgrade] = []
-            for level in self._ORDERED_TIERS:
-                if level <= current_level:
+        for file_id, file_tiers in tiers.files.items():
+            if FidelityLevel.TREE not in file_tiers:
+                raise ValueError(f"Missing TREE tier for file {file_id}")
+
+            previous = 0
+            costs[file_id] = {}
+
+            for level in sorted(file_tiers):
+                # Escaping can change token costs; use a monotonic upper bound.
+                previous = max(
+                    previous,
+                    formatter.file_cost(index, tiers, file_id, level, counter, config),
+                )
+
+                costs[file_id][level] = previous
+
+        upgrades: list[tuple[float, float, int, int, FidelityLevel]] = []
+
+        def enqueue(file_id: int, remaining: int) -> None:
+            current = selected[file_id]
+            candidates = []
+
+            for level, cost in costs[file_id].items():
+                if level <= current:
                     continue
-                cost = self._effective_tier_cost(file, level) - current_cost
-                gain = self.tier_utility(file, level) - current_value
-                if cost <= available and gain > 0:
-                    candidates.append(_MarginalUpgrade(level, gain, cost, gain / max(cost, 1)))
+
+                delta = cost - costs[file_id][current]
+                gain = scores[file_id] * (
+                    level.semantic_utility - current.semantic_utility
+                )
+
+                if delta <= remaining and gain > 0:
+                    density = gain / delta if delta else math.inf
+                    candidates.append((-density, -gain, delta, file_id, level))
+
             if candidates:
-                best = min(
-                    candidates,
-                    key=lambda item: (-item.density, -item.delta_utility, item.delta_tokens),
-                )
-                heapq.heappush(
-                    upgrades, (-best.density, -best.delta_utility, best.delta_tokens, index, best)
-                )
+                heapq.heappush(upgrades, min(candidates))
 
-        for index in range(len(files)):
-            enqueue_upgrade(index, net_budget - used_tokens)
+        for file_id in sorted(index.files):
+            enqueue(file_id, available)
+
+        used = 0
+
         while upgrades:
-            _, _, _, index, upgrade = heapq.heappop(upgrades)
-            if used_tokens + upgrade.delta_tokens > net_budget:
-                enqueue_upgrade(index, net_budget - used_tokens)
+            _, _, delta, file_id, level = heapq.heappop(upgrades)
+
+            if delta > available - used:
+                enqueue(file_id, available - used)
                 continue
-            file = files[index]
-            file.selected_fidelity = upgrade.to_level
-            used_tokens += upgrade.delta_tokens
-            enqueue_upgrade(index, net_budget - used_tokens)
-        return used_tokens
 
-    def _local_search_refinement(
-        self, files: list[FileAnalysis], used_tokens: int, net_budget: int
-    ) -> int:
-        """Trade one file's fidelity for another's when total utility increases."""
-        for _ in range(25):
-            best_gain = 1e-06
-            best_swap: tuple[int, FidelityLevel, int, FidelityLevel, int] | None = None
-            upgrades: list[tuple[int, int, FidelityLevel, float]] = []
-            for up_idx, up_file in enumerate(files):
-                current = up_file.selected_fidelity
-                current_cost = self._effective_tier_cost(up_file, current)
-                current_value = self.tier_utility(up_file, current)
-                for target in self._ORDERED_TIERS:
-                    if target > current:
-                        upgrades.append(
-                            (
-                                self._effective_tier_cost(up_file, target) - current_cost,
-                                up_idx,
-                                target,
-                                self.tier_utility(up_file, target) - current_value,
-                            )
-                        )
-            upgrades.sort()
-            costs = [upgrade[0] for upgrade in upgrades]
-            best: list[tuple[float, int, FidelityLevel, int]] = []
-            prefixes: list[tuple[tuple[float, int, FidelityLevel, int], ...]] = []
-            for cost, up_idx, target, gain in upgrades:
-                # Two distinct files suffice to exclude the file being downgraded.
-                candidate = (-gain, up_idx, target, cost)
-                existing = next((item for item in best if item[1] == up_idx), None)
-                if existing is None or candidate < existing:
-                    best = sorted([item for item in best if item[1] != up_idx] + [candidate])[:2]
-                prefixes.append(tuple(best))
+            selected[file_id] = level
+            used += delta
+            enqueue(file_id, available - used)
 
-            for down_idx, down_file in enumerate(files):
-                current = down_file.selected_fidelity
-                current_cost = self._effective_tier_cost(down_file, current)
-                current_value = self.tier_utility(down_file, current)
-                for down_level in self._ORDERED_TIERS:
-                    if down_level >= current:
-                        break
-                    freed = current_cost - self._effective_tier_cost(down_file, down_level)
-                    if freed <= 0:
-                        continue
-                    loss = current_value - self.tier_utility(down_file, down_level)
-                    available = net_budget - used_tokens + freed
-                    position = bisect_right(costs, available) - 1
-                    if position < 0:
-                        continue
-                    for negative_gain, up_idx, target, cost in prefixes[position]:
-                        if up_idx == down_idx:
-                            continue
-                        gain = -negative_gain - loss
-                        if gain > best_gain:
-                            best_gain = gain
-                            best_swap = down_idx, down_level, up_idx, target, cost - freed
-                        break
-            if best_swap is None:
-                break
-            down_idx, down_level, up_idx, target, delta_tokens = best_swap
-            down_file = files[down_idx]
-            down_file.selected_fidelity = down_level
-            files[up_idx].selected_fidelity = target
-            used_tokens += delta_tokens
-        return used_tokens
-
-    def _compute_total_objective(self, files: list[FileAnalysis]) -> float:
-        return sum(self.tier_utility(f, f.selected_fidelity) for f in files)
+        return Selection(
+            tiers=selected,
+            token_counts_estimated=tiers.token_counts_estimated
+            or counter.used_estimates,
+        )

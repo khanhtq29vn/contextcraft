@@ -1,284 +1,481 @@
+"""Expose repository compilation and single-file Python outlines through the CLI."""
+
 from __future__ import annotations
 
-import shutil
-import subprocess
 import sys
+from collections import Counter
+from glob import escape
+from importlib.metadata import version
 from pathlib import Path
+from time import perf_counter
 from typing import Annotated
 
-import typer
+import ignore
+import tree_sitter as ts
+from cyclopts import App, CycloptsError, Group, Parameter
+from cyclopts.help import ColumnSpec, DefaultFormatter, PanelSpec, TableSpec
+from cyclopts.help.specs import DescriptionRenderer, NameRenderer
 from rich import box
 from rich.console import Console
-from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.pretty import Pretty
 from rich.table import Table
 
-from contextcraft import __version__
-from contextcraft.core import ContextCraft
-from contextcraft.elider import FidelityLevel
-from contextcraft.models import CompilationResult, ContextCraftError, OutputFormat
+from contextcraft.config import Config, OutputFormat, TokenizerEncoding
+from contextcraft.formatter import ArtifactFormatter
+from contextcraft.graph import GraphBuilder, GraphScorer
+from contextcraft.imports import ImportResolver
+from contextcraft.index import Indexer
+from contextcraft.languages.python.language import PythonLanguage, get_py_grammar
+from contextcraft.models import Artifact, FidelityLevel, Index, Source, Tiers
+from contextcraft.optimizer import BudgetAllocator
+from contextcraft.source import SourceLoader
+from contextcraft.tiers import TierRenderer
 
-app = typer.Typer(
+DEFAULT_BUDGET_TOKENS = Config().budget_tokens
+DEFAULT_MAX_FILE_SIZE_BYTES = Config().max_file_size_bytes
+
+INPUT_GROUP = Group("Input", sort_key=0)
+OUTPUT_GROUP = Group("Output", sort_key=1)
+FOCUS_GROUP = Group("Focus", sort_key=2)
+TOKEN_GROUP = Group("Token accounting", sort_key=3)
+DIAGNOSTICS_GROUP = Group("Diagnostics", sort_key=4)
+GENERAL_GROUP = Group("General", sort_key=5)
+
+stderr = Console(stderr=True, markup=False, highlight=False)
+app = App(
     name="contextcraft",
-    help="AST-Aware, Dependency-Graph-Ranked, Token-Budgeted Semantic Codebase Compressor for LLMs.",
-    add_completion=False,
-    no_args_is_help=False,
+    help="AST-Aware, Personalized-PageRank-Ranked, Token-Budgeted Codebase Compressor for LLMs",
+    error_console=stderr,
+    error_formatter=str,
+    help_formatter=DefaultFormatter(
+        panel_spec=PanelSpec(box=box.SIMPLE, padding=(1, 0)),
+        table_spec=TableSpec(box=None, show_header=False, padding=(0, 2)),
+        column_specs=(
+            ColumnSpec(
+                renderer=NameRenderer(),
+                header="Option",
+                width=28,
+                overflow="fold",
+            ),
+            ColumnSpec(
+                renderer=DescriptionRenderer(),
+                header="Description",
+                overflow="fold",
+            ),
+        ),
+    ),
+    group_arguments=INPUT_GROUP,
+    group_commands=GENERAL_GROUP,
+    version=version("contextcraft-ai"),
+    version_flags=("--version", "-V"),
 )
-_error_console = Console(stderr=True)
-_output_console = Console(stderr=False)
 
 
-def _version_callback(value: bool) -> None:
-    if value:
-        _output_console.print(f"contextcraft {__version__}")
-        raise typer.Exit(code=0)
+def _write_output(
+    content: str, output: Path | None, *, render_markdown: bool = False
+) -> None:
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(content, encoding="utf-8")
+    elif render_markdown and sys.stdout.isatty():
+        Console().print(Markdown(content))
+    else:
+        sys.stdout.write(content)
+        sys.stdout.flush()
 
 
-@app.command()
+def _render_summary(
+    *,
+    index: Index,
+    source: Source,
+    tiers: Tiers,
+    scores: dict[int, float],
+    artifact: Artifact,
+    config: Config,
+    elapsed_ms: float,
+    output: Path | None,
+) -> None:
+    full_tokens = sum(
+        file_tiers[FidelityLevel.FULL].tokens
+        for file_tiers in tiers.files.values()
+        if FidelityLevel.FULL in file_tiers
+    )
+    counts = Counter(artifact.selected_tiers.values())
+    metrics = [
+        ("Repository", str(index.path)),
+        ("Indexed / loaded files", f"{len(index.files)} / {len(source.content)}"),
+        ("Skipped sources", str(len(index.files) - len(source.content))),
+        ("Encoding", config.tokenizer_encoding.value),
+        ("Full-source tokens", f"{full_tokens:,}"),
+        (
+            "Output tokens / budget",
+            f"{artifact.tokens:,} / {config.budget_tokens:,} ({100 * artifact.tokens / config.budget_tokens:.1f}%)",
+        ),
+        (
+            "Token counts",
+            "Estimated (no exact budget guarantee)"
+            if artifact.token_counts_estimated
+            else "Exact",
+        ),
+    ]
+
+    if full_tokens:
+        metrics.append(
+            (
+                "Compression",
+                f"{full_tokens / artifact.tokens:.2f}x ({100 * (1 - artifact.tokens / full_tokens):.1f}% saved)",
+            )
+        )
+
+    metrics.extend(
+        [
+            (
+                "Selected tiers",
+                " | ".join(
+                    f"{level.name}: {counts[level]}"
+                    for level in reversed(FidelityLevel)
+                ),
+            ),
+            ("Execution time", f"{elapsed_ms:.1f} ms"),
+        ]
+    )
+
+    if output is not None:
+        metrics.append(("Saved output", str(output)))
+
+    summary = Table(
+        title="ContextCraft compilation summary",
+        box=box.SQUARE,
+        header_style="bold cyan",
+    )
+    summary.add_column("Metric")
+    summary.add_column("Value", justify="right")
+
+    for label, value in metrics:
+        summary.add_row(label, value)
+
+    stderr.print()
+    stderr.print(summary)
+
+    if not index.files:
+        return
+
+    ranked = Table(
+        title="Top five files by personalized PageRank",
+        box=box.SQUARE,
+        header_style="bold cyan",
+    )
+    ranked.add_column("File")
+    ranked.add_column("Tier", justify="center")
+    ranked.add_column("PageRank", justify="right")
+    ranked.add_column("Tokens (selected / full)", justify="right")
+
+    for file_id in sorted(
+        index.files,
+        key=lambda file_id: (-scores[file_id], index.files[file_id].path.as_posix()),
+    )[:5]:
+        level = artifact.selected_tiers[file_id]
+        file_tiers = tiers.files[file_id]
+        full = file_tiers.get(FidelityLevel.FULL)
+        path = index.files[file_id].path.relative_to(index.path).as_posix()
+        ranked.add_row(
+            path,
+            level.name,
+            f"{100 * scores[file_id]:.1f}%",
+            f"{file_tiers[level].tokens:,} / {full.tokens if full is not None else 0:,}",
+        )
+
+    stderr.print()
+    stderr.print(ranked)
+
+
+@app.default
 def main(
     path: Annotated[
-        Path,
-        typer.Argument(
-            help="Path to the target Git repository or source directory.", show_default=True
-        ),
+        Path, Parameter(group=INPUT_GROUP, help="Directory or Python source file")
     ] = Path("."),
+    *,
     budget: Annotated[
-        str,
-        typer.Option(
-            "--budget",
-            "-b",
-            help="Strict token budget (supports shorthand like '16k', '32k', '128k', or '8000').",
-            show_default=True,
-        ),
-    ] = "32k",
-    encoding: Annotated[
-        str,
-        typer.Option(
-            "--encoding",
-            "-enc",
-            help="Tiktoken encoding name used for token accounting (e.g. cl100k_base, o200k_base).",
-            show_default=True,
-        ),
-    ] = "cl100k_base",
-    focus: Annotated[
-        str | None,
-        typer.Option(
-            "--focus",
-            "-f",
-            help="Natural-language query or symbol keywords to bias Personalized PageRank.",
-        ),
-    ] = None,
-    focus_file: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--focus-file",
-            help="Specific relative file path or glob to boost in PageRank (repeatable).",
-        ),
-    ] = None,
+        int,
+        Parameter(group=OUTPUT_GROUP, alias="-b", help="Positive output token budget"),
+    ] = DEFAULT_BUDGET_TOKENS,
     output_format: Annotated[
         OutputFormat,
-        typer.Option(
-            "--format",
-            "-m",
-            case_sensitive=False,
-            help="Target output format: markdown, xml (Claude-optimized), or json.",
-            show_default=True,
+        Parameter(
+            group=OUTPUT_GROUP, name="--format", alias="-m", help="Output format"
         ),
     ] = OutputFormat.MARKDOWN,
     output: Annotated[
         Path | None,
-        typer.Option(
-            "--output", "-o", help="Write compiled context to this file path instead of stdout."
+        Parameter(
+            group=OUTPUT_GROUP,
+            alias="-o",
+            help="Write output to this file instead of stdout",
         ),
     ] = None,
-    include: Annotated[
-        list[str] | None,
-        typer.Option("--include", "-i", help="Glob pattern of files to include (repeatable)."),
-    ] = None,
-    exclude: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--exclude", "-e", help="Additional glob pattern of files to exclude (repeatable)."
-        ),
-    ] = None,
-    copy: Annotated[
+    debug: Annotated[
         bool,
-        typer.Option(
-            "--copy", "-c", help="Copy the compiled output directly to the system clipboard."
+        Parameter(
+            group=DIAGNOSTICS_GROUP,
+            help="Print pipeline results, graph, and tier diagnostics to stderr",
         ),
-    ] = False,
-    no_redact: Annotated[
-        bool, typer.Option("--no-redact", help="Disable automatic secret and API key redaction.")
-    ] = False,
-    no_gitignore: Annotated[
-        bool,
-        typer.Option("--no-gitignore", help="Do not respect .gitignore and .contextignore files."),
     ] = False,
     quiet: Annotated[
         bool,
-        typer.Option("--quiet", "-q", help="Suppress the Rich telemetry summary table on stderr."),
+        Parameter(
+            group=DIAGNOSTICS_GROUP,
+            alias="-q",
+            help="Suppress the compilation summary and ranked files",
+        ),
     ] = False,
-    version: Annotated[
+    focus: Annotated[
+        str | None,
+        Parameter(
+            group=FOCUS_GROUP,
+            alias="-f",
+            help="Query used to prefer relevant repository files",
+        ),
+    ] = None,
+    focus_file: Annotated[
+        list[str] | None,
+        Parameter(
+            group=FOCUS_GROUP,
+            consume_multiple=False,
+            help="Prefer a repository-relative path, filename, directory, or glob; repeatable",
+        ),
+    ] = None,
+    exclude: Annotated[
+        list[str] | None,
+        Parameter(
+            group=INPUT_GROUP,
+            alias="-e",
+            consume_multiple=False,
+            help="Additional ignore glob; repeatable",
+        ),
+    ] = None,
+    encoding: Annotated[
+        TokenizerEncoding,
+        Parameter(
+            group=TOKEN_GROUP,
+            alias=("-enc", "--tokenizer-encoding"),
+            name_transform=str.lower,
+            help="Tiktoken encoding used for token accounting",
+        ),
+    ] = TokenizerEncoding.CL100K_BASE,
+    respect_gitignore: Annotated[
         bool,
-        typer.Option(
-            "--version",
-            "-V",
-            callback=_version_callback,
-            is_eager=True,
-            help="Show ContextCraft version and exit.",
+        Parameter(
+            group=INPUT_GROUP,
+            name="--gitignore",
+            alias="--respect-gitignore",
+            negative=("--no-gitignore", "--no-respect-gitignore"),
+            help="Respect .gitignore rules",
+        ),
+    ] = True,
+    redact_secrets: Annotated[
+        bool,
+        Parameter(
+            group=INPUT_GROUP,
+            name="--redact",
+            alias="--redact-secrets",
+            negative=("--no-redact", "--no-redact-secrets"),
+            help="Redact recognized secrets before analysis",
+        ),
+    ] = True,
+    max_file_size_bytes: Annotated[
+        int, Parameter(group=INPUT_GROUP, help="Maximum source file size in bytes")
+    ] = DEFAULT_MAX_FILE_SIZE_BYTES,
+    allow_token_estimates: Annotated[
+        bool,
+        Parameter(
+            group=TOKEN_GROUP,
+            help="Allow approximate counts if tokenization fails; exact budgets are not guaranteed",
         ),
     ] = False,
 ) -> None:
-    _ = version
+    """Compile a directory or print a Python file's skeleton and signatures.
+
+    CLI parameters describe filtering, ranking, token accounting, and output.
+    Directory output is budgeted and redacted according to those options;
+    single-file output is not budgeted or redacted. Write content to stdout
+    or output, and diagnostics to stderr. An output file may be overwritten.
+
+    Raises:
+        SystemExit: With code 2 for invalid budgets, file-size limits, or
+            handled file, encoding, configuration, and walker errors.
+    """
+    if budget <= 0:
+        stderr.print("error: --budget must be positive", style="red")
+        raise SystemExit(2)
+
+    if max_file_size_bytes <= 0:
+        stderr.print("error: --max-file-size-bytes must be positive", style="red")
+        raise SystemExit(2)
+
+    start = perf_counter()
+
     try:
-        exclude_list = list(exclude) if exclude else []
-        if output is not None:
-            try:
-                relative_output = (
-                    output.expanduser().resolve().relative_to(path.expanduser().resolve())
+        path = path.expanduser()
+        output = output.expanduser() if output is not None else None
+
+        if output is not None and path.is_file() and output.resolve() == path.resolve():
+            raise ValueError("Output must not overwrite the input source file")
+
+        if path.is_dir():
+            exclusions = list(exclude or ())
+
+            if output is not None:
+                root = path.resolve()
+
+                for candidate in {output.absolute(), output.resolve()}:
+                    if candidate.is_relative_to(root):
+                        exclusions.append(
+                            "/" + escape(candidate.relative_to(root).as_posix())
+                        )
+
+            config = Config(
+                budget_tokens=budget,
+                output_format=output_format,
+                focus_query=focus,
+                focus_files=focus_file or [],
+                exclude_patterns=exclusions,
+                tokenizer_encoding=encoding,
+                respect_gitignore=respect_gitignore,
+                redact_secrets=redact_secrets,
+                max_file_size_bytes=max_file_size_bytes,
+                allow_token_estimates=allow_token_estimates,
+            )
+
+            index = Indexer().index(path, config)
+            source = SourceLoader().load(index, config)
+            resolutions = ImportResolver().resolve(index, source)
+            graph = GraphBuilder().build(index, source, resolutions)
+            scores = GraphScorer().score(index, source, graph, config)
+            tiers = TierRenderer().render(index, source, config)
+            selection = BudgetAllocator().allocate(index, tiers, scores, config)
+            artifact = ArtifactFormatter().format(
+                index, tiers, scores, selection, config
+            )
+
+            elapsed_ms = (perf_counter() - start) * 1000
+
+            if debug:
+                stderr.print(
+                    Pretty(
+                        {
+                            "index": index,
+                            "source": source,
+                            "resolutions": resolutions,
+                            "scores": scores,
+                            "selection": selection,
+                            "artifact": artifact,
+                        }
+                    )
                 )
-            except ValueError:
-                pass
-            else:
-                exclude_list.append("/" + relative_output.as_posix())
-        compiler = ContextCraft(
-            budget_tokens=budget,
-            focus_query=focus,
-            focus_files=list(focus_file) if focus_file else [],
-            output_format=output_format,
-            include_patterns=list(include) if include else [],
-            exclude_patterns=exclude_list,
-            respect_gitignore=not no_gitignore,
-            redact_secrets=not no_redact,
-            tokenizer_encoding=encoding,
-        )
-        result = compiler.compile(path)
-    except ContextCraftError as exc:
-        _error_console.print(f"[bold red]ContextCraft Error:[/bold red] {exc}")
-        raise typer.Exit(code=1) from exc
-    except Exception as exc:
-        _error_console.print(f"[bold red]Unexpected Failure:[/bold red] {exc}")
-        raise typer.Exit(code=1) from exc
-    if output is not None:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(result.content, encoding="utf-8")
-    else:
-        sys.stdout.write(result.content)
-        if not result.content.endswith("\n"):
-            sys.stdout.write("\n")
-        sys.stdout.flush()
-    copied_ok = False
-    if copy:
-        copied_ok = _copy_to_clipboard(result.content)
-    if not quiet:
-        _render_telemetry_summary(
-            result=result, output_path=output, copied_to_clipboard=copied_ok, copy_requested=copy
-        )
+                stderr.print("\n=== GRAPH ===", style="bold")
+                stderr.print(
+                    Pretty(
+                        {
+                            "nodes": {
+                                file_id: file.path.relative_to(index.path).as_posix()
+                                for file_id, file in index.files.items()
+                            },
+                            "edges": [
+                                (graph[source], graph[target], weight)
+                                for source, target, weight in graph.weighted_edge_list()
+                            ],
+                        },
+                    )
+                )
+                stderr.print("\n=== TIERS ===", style="bold")
+                stderr.print(
+                    Pretty(
+                        {
+                            "encoding": config.tokenizer_encoding.value,
+                            "token_counts_estimated": artifact.token_counts_estimated,
+                            "indexed_files": len(index.files),
+                            "loaded_files": len(source.content),
+                            "tree_only_files": len(index.files) - len(source.content),
+                            "totals": {
+                                level.name: {
+                                    "files": sum(
+                                        level in file_tiers
+                                        for file_tiers in tiers.files.values()
+                                    ),
+                                    "tokens": sum(
+                                        file_tiers[level].tokens
+                                        for file_tiers in tiers.files.values()
+                                        if level in file_tiers
+                                    ),
+                                }
+                                for level in FidelityLevel
+                            },
+                            "files": {
+                                file_id: {
+                                    "path": index.files[file_id]
+                                    .path.relative_to(index.path)
+                                    .as_posix(),
+                                    "tokens": {
+                                        level.name: tier.tokens
+                                        for level, tier in file_tiers.items()
+                                    },
+                                }
+                                for file_id, file_tiers in tiers.files.items()
+                            },
+                        },
+                    )
+                )
 
-
-def _render_telemetry_summary(
-    *,
-    result: CompilationResult,
-    output_path: Path | None,
-    copied_to_clipboard: bool,
-    copy_requested: bool,
-) -> None:
-    stats = result.stats
-    metrics_table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan", expand=False)
-    metrics_table.add_column("Metric", style="bold white")
-    metrics_table.add_column("Value", justify="right", style="green")
-    metrics_table.add_row("Repository Root", result.root_path)
-    metrics_table.add_row(
-        "Files Compiled",
-        f"{stats.files_compiled} (skipped {stats.ignored_files_skipped} ignored, {stats.binary_files_skipped} binary)",
-    )
-    metrics_table.add_row("Raw Repository Tokens", f"{stats.raw_tokens:,}")
-    metrics_table.add_row(
-        "Compressed Tokens",
-        f"{stats.compressed_tokens:,} / {stats.budget_tokens:,} ({stats.budget_utilization_pct:.1f}%)",
-    )
-    metrics_table.add_row(
-        "Compression Ratio",
-        f"{stats.compression_ratio:.2f}x ({stats.token_savings_pct:.1f}% saved)",
-    )
-    metrics_table.add_row(
-        "Fidelity Allocation",
-        f"FULL: {stats.fidelity_counts.get('FULL', 0)} | SKEL: {stats.fidelity_counts.get('SKEL', 0)} | SIGS: {stats.fidelity_counts.get('SIGS', 0)} | TREE: {stats.fidelity_counts.get('TREE', 0)}",
-    )
-    metrics_table.add_row(
-        "Public API Coverage",
-        f"{stats.preserved_signatures_pct:.1f}% ({stats.preserved_public_signatures}/{stats.total_public_signatures} signatures)",
-    )
-    if stats.secrets_redacted > 0:
-        metrics_table.add_row(
-            "Secrets Scrubbed", f"[bold yellow]{stats.secrets_redacted} redacted[/bold yellow]"
-        )
-    metrics_table.add_row("Execution Time", f"{stats.execution_time_ms:.1f} ms")
-    if output_path is not None:
-        metrics_table.add_row("Saved Output", str(output_path))
-    if copy_requested:
-        status_str = "Copied to clipboard" if copied_to_clipboard else "Clipboard unavailable"
-        metrics_table.add_row("Clipboard", status_str)
-    _error_console.print()
-    _error_console.print(
-        Panel.fit(
-            metrics_table,
-            title="[bold magenta]ContextCraft Compilation Summary[/bold magenta]",
-            border_style="bright_blue",
-        )
-    )
-    if result.files:
-        top_table = Table(
-            title="Top Architectural Files by Personalized PageRank",
-            box=box.SIMPLE_HEAD,
-            header_style="bold blue",
-        )
-        top_table.add_column("File Path", style="white")
-        top_table.add_column("Fidelity", justify="center")
-        top_table.add_column("PageRank", justify="right", style="cyan")
-        top_table.add_column("Tokens (Selected / Raw)", justify="right", style="green")
-        badge_styles = {
-            FidelityLevel.FULL: "[bold green]FULL[/bold green]",
-            FidelityLevel.SKELETON: "[bold cyan]SKEL[/bold cyan]",
-            FidelityLevel.SIGNATURES: "[bold yellow]SIGS[/bold yellow]",
-            FidelityLevel.TREE: "[dim]TREE[/dim]",
-        }
-        ranked = sorted(result.files, key=lambda f: (-f.pagerank_score, f.rel_path))
-        for file_obj in ranked[:5]:
-            top_table.add_row(
-                file_obj.rel_path,
-                badge_styles[file_obj.selected_fidelity],
-                f"{file_obj.pagerank_score * 100.0:.1f}%",
-                f"{file_obj.selected_tokens:,} / {file_obj.raw_tokens:,}",
+            _write_output(
+                artifact.content,
+                output,
+                render_markdown=config.output_format == OutputFormat.MARKDOWN,
             )
-        _error_console.print(top_table)
+
+            if not quiet:
+                _render_summary(
+                    index=index,
+                    source=source,
+                    tiers=tiers,
+                    scores=scores,
+                    artifact=artifact,
+                    config=config,
+                    elapsed_ms=elapsed_ms,
+                    output=output,
+                )
+
+            return
+
+        source = path.read_bytes()
+        parser = ts.Parser(get_py_grammar())
+        skel = PythonLanguage.render_skel(source, parser)
+        sigs = PythonLanguage.render_sigs(source, parser)
+        content = (
+            "=== SKEL ===\n"
+            + skel
+            + ("" if skel.endswith("\n") else "\n")
+            + "\n=== SIGS ===\n"
+            + sigs
+            + ("" if sigs.endswith("\n") else "\n")
+        )
+        _write_output(content, output)
+
+        if output is not None and not quiet:
+            stderr.print(f"Saved output: {output}", soft_wrap=True)
+
+    except (OSError, UnicodeError, ValueError, ignore.Error, ignore.IOError) as exc:
+        stderr.print(f"error: {exc}", style="red", soft_wrap=True)
+        raise SystemExit(2) from None
 
 
-def _copy_to_clipboard(text: str) -> bool:
-    commands: list[list[str]] = [
-        ["pbcopy"],
-        ["wl-copy"],
-        ["xclip", "-selection", "clipboard"],
-        ["xsel", "--clipboard", "--input"],
-        ["clip"],
-    ]
-    for cmd in commands:
-        executable = shutil.which(cmd[0])
-        if executable is None:
-            continue
-        try:
-            subprocess.run(
-                [executable, *cmd[1:]],
-                input=text.encode("utf-8"),
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=3,
-            )
-            return True
-        except Exception:
-            continue
-    return False
+def run_cli() -> None:
+    """Run the CLI and report argument errors with exit code 2.
 
-
-if __name__ == "__main__":
-    app()
+    Arguments are read from sys.argv. Results go to stdout or the requested
+    output file; argument errors and compilation diagnostics go to stderr.
+    """
+    try:
+        app(exit_on_error=False, print_error=True, result_action="return_value")
+    except CycloptsError:
+        raise SystemExit(2) from None

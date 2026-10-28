@@ -1,11 +1,13 @@
+"""Run the ContextCraft command-line interface."""
+
 from __future__ import annotations
 
 
 def run_cli() -> None:
-    """Application entry point."""
-    from contextcraft.cli import app
+    """Load the optional CLI dependencies and run the command-line app."""
+    from contextcraft.cli import run_cli as cli_run
 
-    app()
+    cli_run()
 
 
 if __name__ == "__main__":

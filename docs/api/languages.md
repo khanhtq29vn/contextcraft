@@ -1,148 +1,108 @@
 # Language Extension API
 
-For supported formats and a custom-language registration example, see
-[Language Support](../language-supports.md).
+## Selecting languages
 
-## Registry
+`contextcraft.languages.BUILTIN_LANGUAGES` is a tuple of language classes.
+Currently it contains only `PythonLanguage`. Rust has no registered implementation.
 
-```{eval-rst}
-.. autofunction:: contextcraft.default_registry
+Pass a replacement tuple to `ContextCraft` or `Indexer` to select implementations.
+The tuple replaces the defaults; extend `BUILTIN_LANGUAGES` to keep them.
+
+```python
+from contextcraft import ContextCraft
+from contextcraft.config import Config
+from contextcraft.languages.python.language import PythonLanguage
+
+compiler = ContextCraft(Config(budget_tokens=8000), languages=(PythonLanguage,))
+artifact = compiler.compile(".")
 ```
 
-Returns a new registry containing the built-in language classes. Register your
-own language before passing it to `ContextCraft(registry=registry)`.
+There is no separate registry or alias API. Implementations should use distinct
+language IDs. Detection chooses the first class in tuple order whose suffix or
+exact filename matches the path. Both checks are case-sensitive; an exact
+filename match does not take priority over an earlier suffix match.
 
-```{eval-rst}
-.. autoclass:: contextcraft.LanguageRegistry
-   :members: register, get, detect_candidates, languages, ignore_patterns
-   :undoc-members:
-```
+Indexing stores detected implementations in `Index.languages`, keyed by language
+ID, and records each file's language ID in `File.language_id`. Later stages reuse that
+mapping. A non-null file language ID requires a matching implementation;
+missing entries raise `KeyError` when used. Files with no match have
+`language_id=None` and retain full source without language-specific analysis.
 
-- `register()` accepts a `Language` subclass, not an instance. Duplicate IDs or
-  aliases raise `ValueError`; multiple languages may share an extension.
-- `get()` resolves an ID or alias, returning `None` for an unknown name.
-- `detect_candidates()` prefers an exact, case-sensitive filename match over
-  an extension match. Extensions are case-insensitive. Candidates retain
-  registration order; an unknown path returns an empty list.
-- `languages` is a tuple of registered classes. `ignore_patterns` combines
-  their ignore patterns without duplicates.
+## Language contract
 
-## Language definition
-
-The following types live in `contextcraft.languages.base`.
-
-```{eval-rst}
-.. autoclass:: contextcraft.languages.base.LanguageSpec
-```
-
-| Field             | Meaning                                                     |
-| :---------------- | :---------------------------------------------------------- |
-| `id`              | Unique registry ID                                          |
-| `extensions`      | Filename suffixes including the leading dot, such as `.py`  |
-| `filenames`       | Exact filenames such as `Dockerfile`                        |
-| `ignore_patterns` | Language-specific scanner exclusions                        |
-| `parser_id`       | Grammar name passed to tree-sitter-language-pack, or `None` |
-| `aliases`         | Additional names accepted by registry lookup                |
+Subclass `contextcraft.languages.base.Language` and implement its static methods.
+Methods that analyze or render source receive UTF-8 bytes, after redaction when
+that option is enabled. Rendering methods return text outlines, which need not
+be executable source.
 
 ```{eval-rst}
 .. autoclass:: contextcraft.languages.base.Language
-   :members: parse, build_scopes, build_selected
-   :undoc-members:
+   :members: get_language_id, get_file_extensions, get_filenames, get_root_files, get_package_files, get_ignore_patterns, extract_docstrings, extract_imports, resolve_imports, render_sigs, render_skel
 ```
 
-A subclass supplies four class attributes: `spec`, `extractor`,
-`skeleton_builder`, and `signatures_builder`. The extractor and builders are
-classes, not instances. `parse()` and `build_scopes()` delegate to a fresh
-extractor instance.
+### File and project metadata
 
-## Extractors
+| Method                  | Required result                                                  |
+| :---------------------- | :--------------------------------------------------------------- |
+| `get_language_id()`     | Stable language ID stored on files and used in `Index.languages` |
+| `get_file_extensions()` | Recognized suffixes with leading dots, such as `.py`             |
+| `get_filenames()`       | Recognized exact filenames, including extensionless scripts      |
+| `get_root_files()`      | Filenames whose parent directories mark project roots            |
+| `get_package_files()`   | Filenames associated with package metadata and dependencies      |
+| `get_ignore_patterns()` | Default exclusion globs applied during indexing                  |
+
+`Indexer` uses metadata from every supplied implementation for project-root
+markers and exclusions. It assigns each file to the nearest discovered root.
+`get_package_files()` is available as metadata but is not currently used by the
+pipeline.
+
+### Source analysis
+
+`extract_docstrings(source)` returns a tuple of docstring values for query
+matching. `extract_imports(source, file_id)` returns `Import` records whose
+`source_file_id` is the supplied file ID.
+
+`resolve_imports(files, modules, imports)` receives indexed files, project roots,
+and imports keyed by their positions in `Source.imports`. Return an
+`ImportResolution` for each import, separating definite targets, ambiguous
+candidates, and unresolved names. Target IDs must refer to the supplied files.
+Resolution should not import or execute repository code.
+
+See [Results and Pipeline Models](models.md) for the record fields.
+
+### Tier rendering
+
+`render_sigs(source)` returns a declaration outline. `render_skel(source)`
+returns an outline with retained documentation. The pipeline supplies full
+source for `FULL` and empty content for `TREE`.
+
+`TierRenderer` handles token counting and fallback. If a compressed rendering
+is empty or larger than the next richer tier, that richer tier is reused.
+Implementations do not need to enforce the output budget.
+
+## Python implementation
 
 ```{eval-rst}
-.. autoclass:: contextcraft.languages.base.ASTExtractor
-   :members: extract, build_scopes
-   :undoc-members:
+.. autoclass:: contextcraft.languages.python.language.PythonLanguage
 ```
 
-This protocol accepts a tree-sitter root node and the original UTF-8 bytes.
-`extract()` returns a `ParsedAst`; `build_scopes()` returns a `ScopeGraph`.
+Python detection recognizes `.py`, `.pyi`, and `.pyw`, plus `SConstruct`,
+`SConscript`, and `wscript`. Analysis and rendering use Tree-sitter.
 
-```{eval-rst}
-.. autoclass:: contextcraft.languages.base.BaseExtractor
-   :members: extract, build_scopes
-   :undoc-members:
-```
+- Docstring extraction returns literal module, class, and function docstrings
+  in source order. Invalid captures and non-string values are skipped.
+- Import extraction includes nested imports, preserves relative-import levels,
+  and records original names rather than aliases. Statements with parse errors
+  are skipped.
+- Import resolution stays within the source file's project root. It recognizes
+  packages with `__init__.py` or `__init__.pyi`, not namespace packages. A `.py`
+  module takes precedence over a matching `.pyi` stub. Names that could be
+  attributes rather than submodules may remain unresolved.
+- `SIGS` includes class and function headers, including nested and private
+  declarations. It omits decorators, docstrings, imports, and bodies.
+- `SKEL` includes headers, decorators, and captured class/function docstrings.
+  It omits imports and implementation bodies.
 
-`BaseExtractor.extract()` creates a `ParsedAst` using `build_scopes()` and the
-root's error status. Override `build_scopes()` at minimum; override `extract()`
-to add symbols and imports.
-
-```{eval-rst}
-.. autofunction:: contextcraft.ast.parser.parse
-```
-
-This helper loads the configured grammar and calls the language extractor.
-With `parser_id=None`, it returns a source-only AST. Grammar-loading failures
-return a source-only AST with `has_errors=True`.
-
-## Builders
-
-```{eval-rst}
-.. autoclass:: contextcraft.languages.base.SkeletonBuilder
-   :members: build
-   :undoc-members:
-```
-
-```{eval-rst}
-.. autoclass:: contextcraft.languages.base.SignaturesBuilder
-   :members: build, build_selected
-   :undoc-members:
-```
-
-Both builders receive a `LanguageSpec` at construction. Implement
-`build(parsed)` to return text; token counting and tier fallback are handled by
-`Elider`. Builders should use the supplied AST rather than reparsing the source.
-
-`SignaturesBuilder.build_selected(parsed, symbols)` renders a subset of declarations.
-Its default implementation includes their ancestors and calls `build()` with a
-filtered symbol list, preserving the original AST. Override it if a custom
-builder needs additional context.
-
-`Language.build_selected()` uses the signature builder, falling back to a
-source-preserving skeleton when needed.
-
-Built-in signature builders trim known unused named imports using their grammar.
-This covers Python, JavaScript/TypeScript/TSX, Rust, Go, Java, C#, Kotlin, Scala,
-Swift, and PHP where the declaration identifies a binding. Trimming preserves
-whole grouped declarations if any binding is needed. Runtime loads such as
-Ruby `require`, R `library`, shell `source`, C/C++ headers, namespace imports,
-wildcards, and other unclassifiable forms remain intact. Imports and source
-ranges on the original AST are never changed.
-
-## Scope data
-
-These types live in `contextcraft.ast.scope`.
-
-```{eval-rst}
-.. autoclass:: contextcraft.ast.scope.ScopeGraph
-```
-
-`scopes`, `bindings`, and `references` hold the extracted lexical scope graph.
-
-```{eval-rst}
-.. autoclass:: contextcraft.ast.scope.Scope
-   :members: resolve
-   :undoc-members:
-```
-
-`resolve(name)` searches the current scope and then its parents, returning the
-nearest `Binding` or `None`.
-
-```{eval-rst}
-.. autoclass:: contextcraft.ast.scope.Binding
-```
-
-```{eval-rst}
-.. autoclass:: contextcraft.ast.scope.Reference
-```
-
-Bindings and references carry a name, half-open byte offsets, and their scope.
+Python's `render_sigs()` and `render_skel()` accept an optional Python-configured
+`tree_sitter.Parser` as a second argument for reuse. Other language
+implementations need only accept the source argument defined by `Language`.

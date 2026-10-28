@@ -1,27 +1,93 @@
+"""Extract Python import statements as language-independent records."""
+
 from __future__ import annotations
 
-import ast
+import tree_sitter as ts
 
-from contextcraft.ast import Import, ParsedAst
-from contextcraft.languages.imports import ImportTrimmer as BaseImportTrimmer
+from contextcraft.models import Import
 
 
-class ImportTrimmer(BaseImportTrimmer):
-    def trim(self, parsed: ParsedAst) -> list[Import]:
-        if b"__all__" in parsed.source:
-            return parsed.imports
-        return super().trim(parsed)
+def _import_name(source: bytes, node: ts.Node) -> str:
+    if node.type == "aliased_import":
+        name = node.child_by_field_name("name")
 
-    @staticmethod
-    def _bindings(parser_id: str | None, declaration: str) -> frozenset[str] | None:
-        try:
-            statement = ast.parse(declaration).body[0]
-        except (SyntaxError, IndexError):
-            return None
-        if not isinstance(statement, (ast.Import, ast.ImportFrom)):
-            return None
-        if isinstance(statement, ast.ImportFrom) and statement.module == "__future__":
-            return None
-        if any(alias.name == "*" or alias.asname == alias.name for alias in statement.names):
-            return None
-        return frozenset(alias.asname or alias.name.split(".")[0] for alias in statement.names)
+        if name is None:
+            return ""
+
+        node = name
+
+    return ".".join(
+        source[child.start_byte : child.end_byte].decode("utf-8")
+        for child in node.named_children
+        if child.type == "identifier"
+    )
+
+
+def extract_imports(
+    source: bytes, file_id: int, parser: ts.Parser, query: ts.Query
+) -> list[Import]:
+    """Return import records in source order, including nested imports.
+
+    Args:
+        source: UTF-8 Python source bytes to parse.
+        file_id: Index file ID assigned to every returned record.
+        parser: Parser configured with the Python grammar.
+        query: Query that captures import statements as import.statement.
+
+    Returns:
+        Import records with original module names rather than aliases.
+        Relative imports retain the number of leading dots, and wildcard
+        imports use '*'. Statements with parse errors are skipped.
+    """
+    tree = parser.parse(source)
+    captures = ts.QueryCursor(query).captures(tree.root_node)
+    records = []
+
+    for statement in sorted(
+        captures.get("import.statement", []), key=lambda node: node.start_byte
+    ):
+        if statement.has_error:
+            continue
+
+        names = tuple(
+            name
+            for node in statement.children_by_field_name("name")
+            if (name := _import_name(source, node))
+        )
+
+        if statement.type == "import_statement":
+            records.extend(
+                Import(source_file_id=file_id, module_name=name) for name in names
+            )
+            continue
+
+        module = statement.child_by_field_name("module_name")
+
+        if module is None:
+            continue
+
+        relative_level = 0
+        module_name = _import_name(source, module)
+
+        if module.type == "relative_import":
+            for child in module.named_children:
+                if child.type == "import_prefix":
+                    relative_level = source[child.start_byte : child.end_byte].count(
+                        b"."
+                    )
+                elif child.type == "dotted_name":
+                    module_name = _import_name(source, child)
+
+        if any(child.type == "wildcard_import" for child in statement.named_children):
+            names = ("*",)
+
+        records.append(
+            Import(
+                source_file_id=file_id,
+                module_name=module_name,
+                relative_level=relative_level,
+                imported_names=names,
+            )
+        )
+
+    return records

@@ -1,135 +1,90 @@
+"""Define the contract for language detection, analysis, and tier rendering."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
-from typing import ClassVar, Protocol
 
-from tree_sitter import Node
-from tree_sitter_language_pack import get_parser
-
-from contextcraft.ast import ParsedAst, Symbol
-from contextcraft.ast.scope import ScopeGraph
-from contextcraft.languages.imports import ImportTrimmer
+from contextcraft.models import File, Import, ImportResolution, ModuleRoot
 
 
-@dataclass(frozen=True)
-class LanguageSpec:
-    id: str
-    extensions: frozenset[str] = frozenset()
-    filenames: frozenset[str] = frozenset()
-    ignore_patterns: tuple[str, ...] = ()
-    parser_id: str | None = None
-    aliases: tuple[str, ...] = ()
+class Language(ABC):
+    """Define language metadata and source-analysis operations.
 
+    Implementations accept UTF-8 source bytes and use file, module, and
+    import IDs from the same analysis. Rendered outlines do not need to be
+    executable source.
+    """
 
-class ASTExtractor(Protocol):
-    def extract(
-        self,
-        root: Node,
-        source: bytes,
-    ) -> ParsedAst: ...
-
-    def build_scopes(self, root: Node, source: bytes) -> ScopeGraph: ...
-
-
-class BaseExtractor:
-    def extract(self, root: Node, source: bytes) -> ParsedAst:
-        graph = self.build_scopes(root, source)
-        return ParsedAst(source=source, scope_graph=graph, has_errors=root.has_error)
-
-    def build_scopes(self, root: Node, source: bytes) -> ScopeGraph:
-        raise NotImplementedError
-
-
-class SkeletonBuilder(ABC):
-    def __init__(self, spec: LanguageSpec) -> None:
-        self.spec = spec
-
+    @staticmethod
     @abstractmethod
-    def build(self, parsed: ParsedAst) -> str:
-        raise NotImplementedError
+    def get_language_id() -> str:
+        """Return the stable language ID stored on indexed files."""
+        ...
 
-
-class SignaturesBuilder(ABC):
-    import_trimmer: ClassVar[type[ImportTrimmer]] = ImportTrimmer
-
-    def __init__(self, spec: LanguageSpec) -> None:
-        self.spec = spec
-
+    @staticmethod
     @abstractmethod
-    def build(self, parsed: ParsedAst) -> str:
-        raise NotImplementedError
+    def get_file_extensions() -> frozenset[str]:
+        """Return recognized suffixes, including the leading dot."""
+        ...
 
-    def _import_lines(self, parsed: ParsedAst) -> list[str]:
-        return list(
-            dict.fromkeys(
-                parsed.text(item.declaration_range)
-                for item in self.import_trimmer(self.spec).trim(parsed)
-            )
-        )
+    @staticmethod
+    @abstractmethod
+    def get_filenames() -> frozenset[str]:
+        """Return exact filenames to recognize regardless of suffix."""
+        ...
 
-    def build_selected(self, parsed: ParsedAst, symbols: list[Symbol]) -> str:
-        """Render selected declarations with their enclosing type context."""
-        selected = {id(symbol) for symbol in symbols}
-        for symbol in symbols:
-            parent = symbol.parent
-            while parent is not None:
-                selected.add(id(parent))
-                parent = parent.parent
-        return self.build(
-            replace(parsed, symbols=[symbol for symbol in parsed.symbols if id(symbol) in selected])
-        )
+    @staticmethod
+    @abstractmethod
+    def get_root_files() -> frozenset[str]:
+        """Return filenames that mark a project root for file ownership."""
+        ...
 
+    @staticmethod
+    @abstractmethod
+    def get_package_files() -> frozenset[str]:
+        """Return filenames associated with package metadata and dependencies."""
+        ...
 
-class Language:
-    spec: ClassVar[LanguageSpec]
-    extractor: ClassVar[type[ASTExtractor]]
-    skeleton_builder: ClassVar[type[SkeletonBuilder]]
-    signatures_builder: ClassVar[type[SignaturesBuilder]]
+    @staticmethod
+    @abstractmethod
+    def get_ignore_patterns() -> tuple[str, ...]:
+        """Return default exclusion globs for repository indexing."""
+        ...
 
-    @classmethod
-    def parse(cls, root: Node, source: bytes) -> ParsedAst:
-        return cls.extractor().extract(root, source)
+    @staticmethod
+    @abstractmethod
+    def extract_docstrings(source: bytes) -> tuple[str, ...]:
+        """Return docstring text extracted from UTF-8 source bytes."""
+        ...
 
-    @classmethod
-    def build_selected(cls, parsed: ParsedAst, symbols: list[Symbol]) -> str:
-        """Render a subset, falling back to body-elided native source when needed."""
-        content = cls.signatures_builder(cls.spec).build_selected(parsed, symbols)
-        if cls.spec.parser_id is None or parsed.has_errors:
-            return content
-        try:
-            parser = get_parser(cls.spec.parser_id)
-        except Exception:
-            return content
-        if not parser.parse(content.encode("utf-8")).root_node.has_error:
-            return content
+    @staticmethod
+    @abstractmethod
+    def extract_imports(source: bytes, file_id: int) -> list[Import]:
+        """Extract imports from source and associate each one with file_id."""
+        ...
 
-        # Preserve native container syntax (including namespaces and impl blocks)
-        # when a compact builder cannot represent a selected declaration safely.
-        selected = {id(symbol) for symbol in symbols}
-        for symbol in symbols:
-            parent = symbol.parent
-            while parent is not None:
-                selected.add(id(parent))
-                parent = parent.parent
-        spans = sorted(
-            (symbol.declaration_range for symbol in parsed.symbols if id(symbol) not in selected),
-            key=lambda span: (span.start_byte, -span.end_byte),
-        )
-        edits = []
-        end = -1
-        for span in spans:
-            if span.start_byte >= end:
-                edits.append(span)
-                end = span.end_byte
-        source = bytearray(parsed.source)
-        for span in reversed(edits):
-            source[span.start_byte : span.end_byte] = b""
-        root = parser.parse(bytes(source)).root_node
-        if root.has_error:
-            return content
-        return cls.skeleton_builder(cls.spec).build(cls.parse(root, bytes(source)))
+    @staticmethod
+    @abstractmethod
+    def resolve_imports(
+        files: dict[int, File],
+        modules: dict[int, ModuleRoot],
+        imports: dict[int, Import],
+    ) -> list[ImportResolution]:
+        """Resolve import IDs against indexed files and their project roots.
 
-    @classmethod
-    def build_scopes(cls, root: Node, source: bytes) -> ScopeGraph:
-        return cls.extractor().build_scopes(root, source)
+        Return one resolution per import. Keep unresolved names and ambiguous
+        candidates separate from definite targets.
+        """
+        ...
+
+    @staticmethod
+    @abstractmethod
+    def render_sigs(input: bytes) -> str:
+        """Return a declaration outline from UTF-8 source bytes."""
+        ...
+
+    @staticmethod
+    @abstractmethod
+    def render_skel(source: bytes) -> str:
+        """Return an outline with declarations and retained documentation."""
+        ...
