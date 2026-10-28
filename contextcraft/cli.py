@@ -286,13 +286,6 @@ def main(
     max_file_size_bytes: Annotated[
         int, Parameter(group=INPUT_GROUP, help="Maximum source file size in bytes")
     ] = DEFAULT_MAX_FILE_SIZE_BYTES,
-    allow_token_estimates: Annotated[
-        bool,
-        Parameter(
-            group=TOKEN_GROUP,
-            help="Allow approximate counts if tokenization fails; exact budgets are not guaranteed",
-        ),
-    ] = False,
 ) -> None:
     """Compile a directory or print a Python file's skeleton and signatures.
 
@@ -344,7 +337,6 @@ def main(
                 respect_gitignore=respect_gitignore,
                 redact_secrets=redact_secrets,
                 max_file_size_bytes=max_file_size_bytes,
-                allow_token_estimates=allow_token_estimates,
             )
 
             index = Indexer().index(path, config)

@@ -62,7 +62,7 @@ argument to replace the built-in language set; see [Language Extension API](lang
 | `redact_secrets`        | `True`                          | Redact recognized secrets before source analysis                      |
 | `max_file_size_bytes`   | `1048576`                       | Positive maximum source size in bytes                                 |
 | `tokenizer_encoding`    | `TokenizerEncoding.CL100K_BASE` | Tiktoken encoding for token accounting                                |
-| `allow_token_estimates` | `False`                         | Allow approximate counts if tokenization fails                        |
+| `allow_token_estimates` | `True`                          | Allow approximate counts if tokenization fails                        |
 
 Direct construction and assignment do not validate field types or constraints.
 For validated input, use `msgspec.convert()` or a typed msgspec decoder. Unknown
@@ -158,7 +158,7 @@ path listing to fit the budget. `render()` alone does not enforce a budget.
 ## Token counting
 
 ```{eval-rst}
-.. py:class:: contextcraft.tiers.TokenCounter(encoding: contextcraft.config.TokenizerEncoding, *, allow_estimates: bool = False)
+.. py:class:: contextcraft.tiers.TokenCounter(encoding: contextcraft.config.TokenizerEncoding, *, allow_estimates: bool = True)
 
    Count tokens with the requested encoding and an optional fallback estimate.
    The ``used_estimates`` attribute stays true after any call uses an estimate.
@@ -169,9 +169,10 @@ path listing to fit the budget. `render()` alone does not enforce a budget.
       counted as ordinary text.
 ```
 
-Exact tiktoken counts are the default. Loading an encoding may download its
-data. If `allow_estimates=True`, loading or encoding failures can fall back to
-an estimate; invalid encoding names still raise `ValueError`. Check
+Token counting tries tiktoken first and falls back to an estimate if loading
+or encoding fails. Loading an encoding may download its data. Invalid encoding
+names still raise `ValueError`. Set `allow_estimates=False` on the counter or
+`allow_token_estimates=False` in `Config` to require exact counts. Check
 `used_estimates` on the counter or `token_counts_estimated` on the artifact
 before treating the budget as exact.
 

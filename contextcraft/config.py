@@ -48,4 +48,4 @@ class Config(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     redact_secrets: bool = True
     max_file_size_bytes: Annotated[int, msgspec.Meta(gt=0)] = 1048576
     tokenizer_encoding: TokenizerEncoding = TokenizerEncoding.CL100K_BASE
-    allow_token_estimates: bool = False
+    allow_token_estimates: bool = True

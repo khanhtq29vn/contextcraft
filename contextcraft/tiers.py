@@ -27,7 +27,7 @@ class TokenCounter:
         self,
         encoding: TokenizerEncoding,
         *,
-        allow_estimates: bool = False,
+        allow_estimates: bool = True,
     ) -> None:
         self.allow_estimates = allow_estimates
         self.used_estimates = False
