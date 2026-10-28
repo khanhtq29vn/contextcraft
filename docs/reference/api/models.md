@@ -1,8 +1,8 @@
-# Results and Pipeline Models
+# Results and pipeline models
 
-Import these types from `contextcraft.models`. They are keyword-only, frozen
-`msgspec.Struct` records, except for the `FidelityLevel` enum. Frozen records
-prevent field reassignment; their nested dictionaries remain mutable.
+The types in `contextcraft.models` are keyword-only, frozen `msgspec.Struct`
+records apart from the `FidelityLevel` enum. Their fields cannot be
+reassigned, although the dictionaries held inside the records remain mutable.
 
 ## Artifact
 
@@ -19,13 +19,14 @@ prevent field reassignment; their nested dictionaries remain mutable.
 | `token_counts_estimated` | Whether any pipeline token count used an estimate                          |
 | `selected_tiers`         | Final fidelity level for every indexed file ID                             |
 
-`selected_tiers` includes any downgrades made during formatting. The artifact
-does not contain the index or per-file scores; use the individual pipeline
-stages to retain those records.
+`selected_tiers` reflects any downgrades made during formatting rather than
+just the initial allocation. The artifact does not retain the index or
+per-file scores, so run the pipeline stages individually if you need those
+records.
 
-If `token_counts_estimated` is false, the output count is exact for the configured
-tokenizer. If true, the count is approximate and the exact-budget guarantee does
-not apply.
+The output count is exact for the configured tokenizer when
+`token_counts_estimated` is false, and approximate when it is true. Only exact
+counts support the exact-budget guarantee.
 
 ## Fidelity and rendered tiers
 
@@ -36,13 +37,14 @@ not apply.
 
 | Level  | Value | Utility | Content                                                      |
 | :----- | :---- | :------ | :----------------------------------------------------------- |
-| `TREE` | `0`   | `0.0`   | No file content; its path may appear in the budgeted listing |
+| `TREE` | `0`   | `0.0`   | No file content. Its path may appear in the budgeted listing |
 | `SIGS` | `1`   | `0.45`  | Declaration outline                                          |
 | `SKEL` | `2`   | `0.82`  | Declaration outline with retained documentation              |
 | `FULL` | `3`   | `1.0`   | Full loaded source after optional redaction                  |
 
-Utilities weight tier upgrades during allocation. Rendered content depends on
-the language implementation; an outline need not be executable source.
+Allocation uses these utilities to weight tier upgrades, while the language
+implementation determines the content of each outline, which does not need to
+be executable source.
 
 ```{eval-rst}
 .. autoclass:: contextcraft.models.RenderedTier
@@ -107,11 +109,10 @@ Later language-dependent stages require this mapping for non-null language IDs.
 - `docstrings`: file IDs mapped to tuples of extracted docstring values.
 - `imports`: a tuple of structured import records.
 
-Files that exceed the configured size limit, contain binary control bytes, or
-cannot be decoded as UTF-8 have no `content` entry. They remain in the index.
-When redaction is enabled, loaded bytes are masked before metadata extraction;
-masking preserves byte offsets and line endings. No secret-match metadata is
-returned.
+Files rejected for size, binary control bytes, or invalid UTF-8 remain in the
+index without a `content` entry. For eligible files, any enabled redaction
+masks source bytes before metadata extraction while preserving byte offsets
+and line endings, but does not return secret-match metadata.
 
 ## Imports and resolutions
 
@@ -121,18 +122,18 @@ returned.
 .. autoclass:: contextcraft.models.ImportResolution
 ```
 
-| Record             | Field                | Meaning                                                           |
-| :----------------- | :------------------- | :---------------------------------------------------------------- |
-| `Import`           | `source_file_id`     | ID of the importing file in `Index.files`                         |
-| `Import`           | `module_name`        | Imported module name without leading relative dots                |
-| `Import`           | `relative_level`     | Number of leading relative-import dots; zero for absolute imports |
-| `Import`           | `imported_names`     | Names requested by a from-import; `("*",)` for a wildcard         |
-| `ImportResolution` | `import_id`          | Position of the import in `Source.imports`                        |
-| `ImportResolution` | `target_file_ids`    | Definite target file IDs                                          |
-| `ImportResolution` | `ambiguous_file_ids` | Candidate file IDs that could not be resolved uniquely            |
-| `ImportResolution` | `unresolved_names`   | Names that were not resolved to indexed files                     |
+| Record             | Field                | Meaning                                                                 |
+| :----------------- | :------------------- | :---------------------------------------------------------------------- |
+| `Import`           | `source_file_id`     | ID of the importing file in `Index.files`                               |
+| `Import`           | `module_name`        | Imported module name without leading relative dots                      |
+| `Import`           | `relative_level`     | Number of leading relative-import dots, or zero for an absolute import  |
+| `Import`           | `imported_names`     | Names requested by a from-import, with `("*",)` representing a wildcard |
+| `ImportResolution` | `import_id`          | Position of the import in `Source.imports`                              |
+| `ImportResolution` | `target_file_ids`    | Definite target file IDs                                                |
+| `ImportResolution` | `ambiguous_file_ids` | Candidate file IDs that could not be resolved uniquely                  |
+| `ImportResolution` | `unresolved_names`   | Names that were not resolved to indexed files                           |
 
-A resolution may include both definite targets and unresolved names. An
-unresolved name can refer to an external dependency or an attribute rather than
-a missing file. The dependency graph uses only definite targets; it omits
-self-imports and merges repeated edges between the same files.
+A resolution can include definite targets alongside unresolved names, since an
+unresolved name may refer to an external dependency or attribute rather than a
+missing file. The dependency graph uses only the definite targets, omitting
+self-imports and merging repeated edges between the same files.

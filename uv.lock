@@ -297,6 +297,7 @@ docs = [
     { name = "sphinx-autobuild", version = "2024.10.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "sphinx-autobuild", version = "2025.8.25", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "sphinxcontrib-katex" },
+    { name = "sphinxcontrib-mermaid" },
 ]
 
 [package.dev-dependencies]
@@ -317,6 +318,7 @@ requires-dist = [
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=8.1.3" },
     { name = "sphinx-autobuild", marker = "extra == 'docs'", specifier = ">=2024.10.3" },
     { name = "sphinxcontrib-katex", marker = "extra == 'docs'", specifier = ">=0.9.11" },
+    { name = "sphinxcontrib-mermaid", marker = "extra == 'docs'", specifier = ">=2.1.1" },
     { name = "tiktoken", specifier = ">=0.14.0" },
     { name = "tree-sitter", specifier = ">=0.26.0" },
     { name = "tree-sitter-python", specifier = ">=0.25.0" },
@@ -1749,6 +1751,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/9a/cd/71d3c7fc1a4e40a03048ce68787e4e4b6f612dc6b95acc89f5010d4cda7a/sphinxcontrib_katex-0.9.11.tar.gz", hash = "sha256:2d32b210d20bbee451a51d19645f6fef5f5568b9a54e2813affb96efa661238a", size = 100476, upload-time = "2025-06-27T12:04:12.703Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/33/14/c62d4553dbf27156b6549ceed1a9768f801c979237a2cf0c3d074e16272f/sphinxcontrib_katex-0.9.11-py3-none-any.whl", hash = "sha256:b0a318d86b8f43314ccdd481ce0db90283ac51f51afd9479969f36a0c291f44e", size = 97956, upload-time = "2025-06-27T12:04:11.478Z" },
+]
+
+[[package]]
+name = "sphinxcontrib-mermaid"
+version = "2.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "pyyaml" },
+    { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "sphinx", version = "9.0.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "sphinx", version = "9.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.12.*'" },
+    { name = "sphinx", version = "9.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/87/06537dff20aa57df2d0f2afa87edff4afa85dec6f57f03f7acc24f83ff88/sphinxcontrib_mermaid-2.1.1.tar.gz", hash = "sha256:f8d7f1b2f0ad69b7ebdd5cbf532fb4ee107893b5373bc2d0e9634089c0b2cfee", size = 22353, upload-time = "2026-09-01T16:10:23.671Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/6a/5bf2222b8084c7a7bc3ec23d470c91e3e03e82e4ce0bbacaa61f456ce7c1/sphinxcontrib_mermaid-2.1.1-py3-none-any.whl", hash = "sha256:3b9ac1a8e0b5154dec3c0acf9b5c54dd9ba58540e416f20858c300814c25648f", size = 16368, upload-time = "2026-09-01T16:10:22.377Z" },
 ]
 
 [[package]]

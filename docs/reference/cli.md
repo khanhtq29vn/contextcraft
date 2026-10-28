@@ -1,19 +1,4 @@
-# API Reference
-
-Use `contextcraft.ContextCraft` to compile a repository. Import configuration
-from `contextcraft.config` and pipeline records from `contextcraft.models`.
-The pages below describe the SDK, its data models, and the language interface.
-Signatures are generated from the installed package.
-
-```{toctree}
-:maxdepth: 2
-
-api/sdk
-api/models
-api/languages
-```
-
-## Command-line interface
+# CLI reference
 
 Both `contextcraft` and `contextcraft-ai` expose the same command:
 
@@ -22,26 +7,26 @@ contextcraft [OPTIONS] [PATH]
 contextcraft --help
 ```
 
-`PATH` defaults to the current directory. For a directory, the command emits a
-budgeted artifact to stdout or `--output`. The compilation summary and ranked
-files go to stderr unless `--quiet` is set. `--debug` prints additional pipeline
-diagnostics to stderr, even with `--quiet`.
+`PATH` defaults to the current directory, producing a budgeted artifact on
+stdout or at the path supplied through `--output`. The compilation summary and
+ranked files go to stderr unless `--quiet` suppresses them, while `--debug`
+adds pipeline diagnostics that remain visible even in quiet mode.
 
-For a single Python file, the command prints its skeleton and signatures instead
-of compiling a repository. This mode does not apply the token budget or redact
-secrets.
+When `PATH` names a single Python file, the command prints its skeleton and
+signatures instead of compiling a repository, without applying the token
+budget or redacting secrets.
 
 | Option                                       | Description                                                                  | Default       |
 | :------------------------------------------- | :--------------------------------------------------------------------------- | :------------ |
-| `--budget`, `-b`                             | Positive integer token budget; shorthand such as `16k` is not accepted       | `16000`       |
+| `--budget`, `-b`                             | Positive integer token budget, without shorthand such as `16k`               | `16000`       |
 | `--encoding`, `-enc`, `--tokenizer-encoding` | Tiktoken encoding for token accounting                                       | `cl100k_base` |
 | `--focus`, `-f`                              | Query used to prefer relevant files                                          | None          |
-| `--focus-file`                               | Repository-relative path, filename, directory, or glob to prefer; repeatable | None          |
+| `--focus-file`                               | Prefer a repository-relative path, filename, directory, or glob (repeatable) | None          |
 | `--format`, `-m`                             | `markdown`, `xml`, or `json`                                                 | `markdown`    |
 | `--output`, `-o`                             | Write output to a file, creating parent directories if needed                | None          |
-| `--exclude`, `-e`                            | Additional ignore glob; repeatable                                           | None          |
+| `--exclude`, `-e`                            | Additional ignore glob (repeatable)                                          | None          |
 | `--no-redact`, `--no-redact-secrets`         | Disable recognized-secret redaction                                          | Off           |
-| `--no-gitignore`, `--no-respect-gitignore`   | Disable Git ignore rules; language and explicit exclusions still apply       | Off           |
+| `--no-gitignore`, `--no-respect-gitignore`   | Disable Git ignore rules while keeping language and explicit exclusions      | Off           |
 | `--max-file-size-bytes`                      | Maximum source file size in bytes                                            | `1048576`     |
 | `--debug`                                    | Print pipeline records, graph edges, and tier diagnostics                    | Off           |
 | `--quiet`, `-q`                              | Suppress the compilation summary and ranked-file table                       | Off           |
@@ -58,5 +43,6 @@ summary reports estimated counts, which do not guarantee an exact token budget.
 contextcraft . --budget 16000 --focus-file 'src/**' --format xml -o context.xml
 ```
 
-An existing output file is overwritten. For directory compilation, an output
-path inside the repository is excluded from indexing.
+The command overwrites an existing output file and, during directory
+compilation, excludes that path from indexing if it falls inside the
+repository.

@@ -1,49 +1,67 @@
 # ContextCraft
 
-**AST-Aware, Dependency-Graph-Ranked, Token-Budgeted Semantic Codebase Compressor for LLMs.**
-
-`ContextCraft` compiles any Git repository into an optimal, high-signal Markdown, Claude XML, or JSON context artifact that strictly fits your target token budget (e.g., `4k`, `16k`, `32k`, `128k` tokens).
-
-## Installation (PyPI & `uvx`)
+ContextCraft turns a repository into a smaller code context for an LLM by
+ranking files according to their imports and relevance to your task, then
+choosing how much of each file will fit within a token budget.
 
 ```bash
-# Run instantly without installing via uvx:
-uvx contextcraft-ai . --budget 8k --focus "AST elision knapsack optimizer pagerank" -o context.md
-
-# Or install globally / in your virtual environment from PyPI:
-pip install contextcraft-ai
-contextcraft . --budget 16k --format xml --copy
+uvx --from 'contextcraft-ai[cli]' contextcraft . --budget 8000 -o context.md
 ```
 
-## Quickstart
+This runs the CLI without a permanent installation.
 
-```bash
-# Compress the current repository into a strict 8,000-token budget
-uv run contextcraft . --budget 8k --focus "authentication flow" --encoding o200k_base -o context.md
-```
+Available as Markdown, XML, or JSON, the output combines full source,
+declaration outlines, and a budgeted path listing. Python files receive
+language-aware analysis, while other UTF-8 text files can still be included as
+full source.
 
-## Python SDK (Single-Pass & Reusable Snapshot)
+Start with [Getting started](getting-started.md) to compile your first
+repository, or read the [current algorithm](concepts/algorithm.md) to
+understand file selection and budget enforcement. Because token counting can
+fall back to estimates, check the reported counting mode before treating a
+budget as exact.
 
-```python
-from contextcraft import ContextCraft, OutputFormat
+```{toctree}
+:maxdepth: 1
+:caption: Start here
 
-cc = ContextCraft(focus_query="AST elision and knapsack optimizer")
-
-# Single-call compilation:
-result = cc.compile("./my-repo", budget_tokens="16k")
-print(result.markdown)
-
-# Or analyze once and render multiple budgets in milliseconds:
-snapshot = cc.analyze("./my-repo")
-small = snapshot.render(budget_tokens="4k")
-large = snapshot.render(budget_tokens="32k", output_format=OutputFormat.XML)
+getting-started
 ```
 
 ```{toctree}
-:maxdepth: 2
-:caption: Contents
+:maxdepth: 1
+:caption: Guides
 
-architecture
-language-supports
-api-reference
+guides/cli
+guides/python-sdk
+guides/adding-a-language
+guides/languages
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Concepts
+
+concepts/pipeline
+concepts/algorithm
+concepts/algorithm-old
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Reference
+
+reference/cli
+reference/configuration
+reference/api/compiler
+reference/api/stages
+reference/api/models
+reference/api/language
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Contributing
+
+contributing/adding-a-language
 ```

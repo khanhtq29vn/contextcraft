@@ -33,8 +33,8 @@ and wheel in `dist/`.
 
 The architecture rewrite currently has no automated test suite. Include a
 reproducible example and the checks you ran in your pull request. For behavior
-changes, show the expected result and any relevant failure cases; passing lint
-and type checks alone does not establish that the behavior is correct.
+changes, show the expected result and relevant failure cases. Lint and type
+checks alone cannot establish that the behavior is correct.
 
 For CLI changes, inspect the help output and run the command on a small sample:
 
@@ -49,94 +49,13 @@ guarantee does not apply.
 
 ## Adding a language
 
-### 1. Add the package and grammar
+Follow [Contribute a language](docs/contributing/adding-a-language.md) for the package layout,
+metadata methods, import-resolution contract, tier rendering, registration, and
+sample cases to check. The [language interface](docs/reference/api/language.md)
+lists the method signatures and return types.
 
-Create `contextcraft/languages/<language>/` with an `__init__.py` and a
-`language.py`. Put Tree-sitter queries in `queries.py` and split import
-extraction, resolution, or docstring handling into separate modules when needed.
-The Python package shows this layout; you do not need to copy every file.
-
-If the implementation uses a new Tree-sitter grammar package, add it with
-`uv add <grammar-package>` and include the updated `pyproject.toml` and `uv.lock`
-in the pull request. Include `from __future__ import annotations` in Python
-source files.
-
-### 2. Define detection and project metadata
-
-Implement a subclass of `contextcraft.languages.base.Language`. All methods on
-that interface are static methods. Supply these metadata methods:
-
-| Method                  | What to return                                                                |
-| :---------------------- | :---------------------------------------------------------------------------- |
-| `get_language_id()`     | A stable ID distinct from other implementations                               |
-| `get_file_extensions()` | A frozen set of suffixes with leading dots, such as `.rs`                     |
-| `get_filenames()`       | A frozen set of exact filenames to recognize                                  |
-| `get_root_files()`      | A frozen set of filenames that identify project roots                         |
-| `get_package_files()`   | A frozen set of package, dependency, and environment filenames                |
-| `get_ignore_patterns()` | A tuple of exclusion globs for generated files, caches, and similar artifacts |
-
-Detection is case-sensitive. The first matching implementation in the supplied
-language tuple wins, whether it matches a suffix or an exact filename. Check
-for overlaps with existing implementations before choosing the registration
-order. Package-file metadata is part of the interface but is not currently used
-by the pipeline.
-
-### 3. Extract metadata and resolve imports
-
-Implement the analysis methods using UTF-8 source bytes. Source loading applies
-redaction before calling them when redaction is enabled.
-
-- `extract_docstrings(source)` returns a tuple of docstring values for query
-  matching. Return an empty tuple if the language has no supported docstrings.
-- `extract_imports(source, file_id)` returns `Import` records. Set each record's
-  `source_file_id` to the supplied ID and preserve the information needed to
-  resolve relative imports and imported names.
-- `resolve_imports(files, modules, imports)` returns one `ImportResolution` per
-  import. The input mapping keys are positions in `Source.imports`; preserve
-  those keys as `import_id`. Target file IDs must come from the supplied index.
-
-Keep definite targets separate from ambiguous candidates and unresolved names.
-Only definite targets become dependency edges. Do not guess a target when the
-syntax could refer to an attribute, an external dependency, or several local
-files. Resolve imports without executing repository code or importing its
-modules.
-
-### 4. Render signatures and skeletons
-
-Implement `render_sigs(source)` for a compact declaration outline and
-`render_skel(source)` for an outline that retains relevant documentation. Keep
-source order and enough nesting information to make declarations understandable.
-The output does not have to be executable code.
-
-The pipeline supplies `FULL` from the loaded source and `TREE` as empty content.
-`TierRenderer` counts tokens and reuses the next richer tier if a compressed
-rendering is empty or larger. Language implementations should not allocate the
-output budget themselves.
-
-### 5. Register and check the implementation
-
-Import the language class in `contextcraft/languages/__init__.py` and add it to
-`BUILTIN_LANGUAGES`. Indexing puts detected classes in `Index.languages`; source
-loading, import resolution, ranking, and tier rendering all reuse that mapping.
-There is no separate registry to update.
-
-During development, you can use `ContextCraft(languages=(YourLanguage,))` or
-`Indexer(languages=(YourLanguage,))` without changing the built-ins. This replaces
-the default language set rather than extending it.
-
-Use a small sample repository to check:
-
-- Extension and exact-filename detection, project-root ownership, and exclusions.
-- Declarations with decorators or attributes, nested declarations, multiline
-  signatures, comments, Unicode, and incomplete or invalid syntax.
-- Absolute and relative imports, aliases, grouped imports, unresolved external
-  dependencies, and ambiguous local targets where the language supports them.
-- The actual `SIGS` and `SKEL` content, not just whether rendering completes.
-- End-to-end output at a small budget, including the formatter's final count.
-
-Describe unsupported syntax and resolution limits in the pull request. Update
-`docs/api/languages.md` and any affected language-support documentation rather
-than implying support that has not been implemented.
+State unsupported syntax and resolution limits in your pull request, and update
+[Supported languages](docs/guides/languages.md) when adding built-in support.
 
 ## Other changes
 
@@ -175,7 +94,8 @@ submit, whether you wrote it yourself or used an assistant.
 Read every change before submitting it and make sure you understand what the
 code does. You should be able to explain why the change is needed, how it fits
 the pipeline, and how it handles relevant edge cases. Run the checks yourself
-and inspect the results; do not rely on an assistant's claim that they passed.
+and inspect the results rather than relying on an assistant's claim that they
+passed.
 
 Do not submit generated code you have not reviewed or cannot explain. Verify
 that referenced APIs, dependencies, and commands exist, and check generated
@@ -215,8 +135,8 @@ When Release Please creates a release, it dispatches **Publish to PyPI** on
 through the `pypi` environment using Trusted Publishing and attestations. The
 separate workflow keeps the attestation identity aligned with the configured
 PyPI Trusted Publisher, `publish-pypi.yml`. Any environment approval rules still
-apply. Release Please reports whether dispatch succeeded; check the separate
-**Publish to PyPI** run to confirm the publishing result.
+apply. Release Please reports whether dispatch succeeded. To confirm that publishing
+succeeded, check the separate **Publish to PyPI** run.
 
 To publish an existing release manually, open **Actions → Publish to PyPI → Run
 workflow** on `main` and enter the tag, such as `v0.2.0`. Creating a tag or release

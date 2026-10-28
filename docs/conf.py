@@ -1,9 +1,16 @@
 """Sphinx configuration for the ContextCraft documentation."""
 
+from __future__ import annotations
+
 project = "ContextCraft"
 author = "ContextCraft Contributors"
 
-extensions = ["myst_parser", "sphinxcontrib.katex", "sphinx.ext.autodoc"]
+extensions = [
+    "myst_parser",
+    "sphinxcontrib.katex",
+    "sphinxcontrib.mermaid",
+    "sphinx.ext.autodoc",
+]
 autodoc_typehints = "signature"
 myst_enable_extensions = ["dollarmath"]
 
