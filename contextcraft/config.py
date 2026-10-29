@@ -35,10 +35,15 @@ class Config(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     change file rankings without excluding files; exclude patterns remove files
     during indexing. Secrets are redacted before source analysis when enabled.
 
+    Workers controls parallel file loading and tier rendering. The default of
+    one runs sequentially. Custom language implementations must be thread-safe
+    when using multiple workers; do not mutate config during compilation.
+
     Token estimates cannot guarantee an exact budget. msgspec validates field
     constraints during decoding or conversion, but not direct construction.
     """
 
+    workers: Annotated[int, msgspec.Meta(gt=0)] = 1
     budget_tokens: Annotated[int, msgspec.Meta(gt=0)] = 16000
     focus_query: str | None = None
     focus_files: list[str] = msgspec.field(default_factory=list)

@@ -108,6 +108,13 @@ Later language-dependent stages require this mapping for non-null language IDs.
 - `content`: file IDs mapped to loaded UTF-8 bytes.
 - `docstrings`: file IDs mapped to tuples of extracted docstring values.
 - `imports`: a tuple of structured import records.
+- `analyses`: file IDs mapped to `FileAnalysis` records containing metadata and
+  sorted, deduplicated `SIGS` and `SKEL` spans.
+
+Each span is `(start_byte, end_byte, indentation)` into the analyzed UTF-8
+bytes. Ranking and tier rendering slice those bytes without parsing or querying
+again. They do not cache rendered outlines. Manually created `Source` records
+must include an analysis for every loaded file with a detected language.
 
 Files rejected for size, binary control bytes, or invalid UTF-8 remain in the
 index without a `content` entry. For eligible files, any enabled redaction

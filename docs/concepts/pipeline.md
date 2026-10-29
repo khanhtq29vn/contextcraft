@@ -21,9 +21,10 @@ flowchart LR
     Scores --> Artifact
 ```
 
-The arrows show data dependencies, not parallel execution. The current
-application runs these stages sequentially, and the file loops within them are
-also sequential.
+Custom language implementations must be thread-safe when using multiple
+workers. Parsers and mutable token counters are not shared between concurrent
+file operations by the built-in Python implementation. More workers may not
+improve CPU-bound Python work; benchmark representative repositories.
 
 ## Index files and detect languages
 
@@ -54,9 +55,12 @@ offsets and line endings so downstream parsers work against the same source.
 Since recognition relies on patterns, it cannot guarantee that the output is
 free of secrets.
 
-For recognized languages, the loader extracts docstrings and imports without
-retaining a shared parse tree for later stages. Each Python extraction or
-rendering operation therefore parses the bytes it receives.
+For recognized languages, the loader calls `Language.analyze()` to extract
+docstrings, imports, and outline spans. Python parses each file once and runs
+one combined query, sharing declaration captures between signatures and
+skeletons. The loader retains byte spans and indentation, not parse trees or
+rendered outlines. Ranking and tier rendering build outlines from those spans
+without parsing or querying again. Rendered text is not cached.
 
 ## Resolve imports and rank files
 

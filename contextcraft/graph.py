@@ -88,11 +88,14 @@ class GraphScorer:
                 else None
             )
 
+            signatures = ""
+
+            if language is not None and content is not None:
+                signatures = language.render_sigs(content, source.analyses[file_id])
+
             fields = (
                 file.path.relative_to(index.path).as_posix(),
-                language.render_sigs(content)
-                if language is not None and content is not None
-                else "",
+                signatures,
                 "\n".join(source.docstrings.get(file_id, ())),
                 content.decode("utf-8") if content is not None else "",
             )
@@ -185,8 +188,7 @@ class GraphScorer:
             is empty. Higher scores give files more weight during allocation.
 
         Raises:
-            KeyError: If query matching encounters a language ID absent from
-                index.languages.
+            KeyError: If query matching encounters a missing language or analysis.
         """
         if graph.num_nodes() == 0:
             return {}

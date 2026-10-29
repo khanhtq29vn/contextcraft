@@ -9,6 +9,7 @@
 
 | Field                   | Default                         | Meaning                                                               |
 | :---------------------- | :------------------------------ | :-------------------------------------------------------------------- |
+| `workers`               | `1`                             | Positive worker count for file loading and tier rendering             |
 | `budget_tokens`         | `16000`                         | Positive integer output token budget                                  |
 | `focus_query`           | `None`                          | Query used to prefer relevant files                                   |
 | `focus_files`           | `[]`                            | Repository-relative paths, filenames, directories, or globs to prefer |

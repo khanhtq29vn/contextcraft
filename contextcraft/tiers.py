@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 
 import tiktoken
 
@@ -76,7 +78,7 @@ class TierRenderer:
         Args:
             index: Files to render and their detected languages.
             source: Loaded bytes keyed by index file ID.
-            config: Tokenizer encoding and estimate policy.
+            config: Tokenizer encoding, estimate policy, and worker count.
 
         Returns:
             A TREE tier for every file, plus FULL, SKEL, and SIGS tiers for
@@ -86,8 +88,12 @@ class TierRenderer:
             therefore never has a lower content token count.
 
         Raises:
-            KeyError: If a loaded file has a language ID absent from index.languages.
+            ValueError: If the worker count is not positive.
+            KeyError: If a loaded file's language or analysis is missing.
         """
+        if config.workers <= 0:
+            raise ValueError("Worker count must be positive")
+
         counter = TokenCounter(
             config.tokenizer_encoding,
             allow_estimates=config.allow_token_estimates,
@@ -95,17 +101,28 @@ class TierRenderer:
 
         tree = RenderedTier(content="", tokens=0)
         tiers = {}
+        estimated = False
 
-        for file_id, file in sorted(index.files.items()):
+        def render_file(
+            file_id: int,
+        ) -> tuple[dict[FidelityLevel, RenderedTier], bool]:
+            file = index.files[file_id]
             file_tiers = {FidelityLevel.TREE: tree}
             source_bytes = source.content.get(file_id)
 
             if source_bytes is None:
-                tiers[file_id] = file_tiers
-                continue
+                return file_tiers, False
 
+            file_counter = (
+                TokenCounter(
+                    config.tokenizer_encoding,
+                    allow_estimates=config.allow_token_estimates,
+                )
+                if config.workers > 1
+                else counter
+            )
             content = source_bytes.decode("utf-8")
-            higher = RenderedTier(content=content, tokens=counter.count(content))
+            higher = RenderedTier(content=content, tokens=file_counter.count(content))
             file_tiers[FidelityLevel.FULL] = higher
             language = (
                 index.languages[file.language_id]
@@ -117,13 +134,14 @@ class TierRenderer:
                 tier = higher
 
                 if language is not None:
+                    analysis = source.analyses[file_id]
                     content = (
-                        language.render_skel(source_bytes)
+                        language.render_skel(source_bytes, analysis)
                         if level == FidelityLevel.SKEL
-                        else language.render_sigs(source_bytes)
+                        else language.render_sigs(source_bytes, analysis)
                     )
 
-                    tokens = counter.count(content)
+                    tokens = file_counter.count(content)
 
                     if content.strip() and tokens <= higher.tokens:
                         tier = RenderedTier(content=content, tokens=tokens)
@@ -131,6 +149,26 @@ class TierRenderer:
                 file_tiers[level] = tier
                 higher = tier
 
-            tiers[file_id] = {level: file_tiers[level] for level in FidelityLevel}
+            return (
+                {level: file_tiers[level] for level in FidelityLevel},
+                file_counter.used_estimates,
+            )
 
-        return Tiers(files=tiers, token_counts_estimated=counter.used_estimates)
+        file_ids = sorted(index.files)
+
+        with (
+            ThreadPoolExecutor(max_workers=config.workers)
+            if config.workers > 1
+            else nullcontext()
+        ) as executor:
+            results = (
+                executor.map(render_file, file_ids)
+                if executor is not None
+                else map(render_file, file_ids)
+            )
+
+            for file_id, (file_tiers, file_estimated) in zip(file_ids, results):
+                tiers[file_id] = file_tiers
+                estimated |= file_estimated
+
+        return Tiers(files=tiers, token_counts_estimated=estimated)

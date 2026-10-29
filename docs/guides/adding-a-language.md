@@ -43,45 +43,10 @@ from contextcraft import ContextCraft
 from contextcraft.config import Config
 from contextcraft.languages import BUILTIN_LANGUAGES
 from contextcraft.languages.base import Language
-from contextcraft.models import File, Import, ImportResolution, ModuleRoot
+from contextcraft.models import File, FileAnalysis, Import, ImportResolution, ModuleRoot
 
 RUST_GRAMMAR = ts.Language(tree_sitter_rust.language())
 DOC_QUERY = ts.Query(RUST_GRAMMAR, "(line_comment doc: (doc_comment) @doc)")
-
-
-def _render_functions(source: bytes, *, include_docs: bool) -> str:
-    tree = ts.Parser(RUST_GRAMMAR).parse(source)
-
-    if tree.root_node.has_error:
-        return source.decode("utf-8")
-
-    parts = []
-
-    for node in tree.root_node.named_children:
-        if node.type != "function_item":
-            continue
-
-        body = node.child_by_field_name("body")
-        if body is None:
-            continue
-
-        if include_docs:
-            comments = []
-            previous = node.prev_named_sibling
-
-            while previous is not None and previous.type == "line_comment":
-                text = source[previous.start_byte : previous.end_byte].decode("utf-8")
-                if not text.startswith("///") or text.startswith("////"):
-                    break
-                comments.append(text.rstrip())
-                previous = previous.prev_named_sibling
-
-            parts.extend(reversed(comments))
-
-        header = source[node.start_byte : body.start_byte].decode("utf-8").rstrip()
-        parts.append(header + " { ... }" if include_docs else header)
-
-    return "\n".join(parts)
 
 
 class RustOutlineLanguage(Language):
@@ -110,17 +75,50 @@ class RustOutlineLanguage(Language):
         return ("**/target/**", "**/Cargo.lock")
 
     @staticmethod
-    def extract_docstrings(source: bytes) -> tuple[str, ...]:
+    def analyze(source: bytes, file_id: int) -> FileAnalysis:
         tree = ts.Parser(RUST_GRAMMAR).parse(source)
         captures = ts.QueryCursor(DOC_QUERY).captures(tree.root_node)
-        return tuple(
+        docstrings = tuple(
             source[node.start_byte : node.end_byte].decode("utf-8").strip()
-            for node in sorted(captures.get("doc", []), key=lambda node: node.start_byte)
+            for node in sorted(
+                captures.get("doc", []), key=lambda node: node.start_byte
+            )
         )
 
-    @staticmethod
-    def extract_imports(source: bytes, file_id: int) -> list[Import]:
-        return []
+        if tree.root_node.has_error:
+            full = ((0, len(source), 0),)
+            return FileAnalysis(docstrings=docstrings, imports=(), sigs=full, skel=full)
+
+        signatures = set()
+        skeleton = set()
+
+        for node in tree.root_node.named_children:
+            if node.type != "function_item":
+                continue
+
+            body = node.child_by_field_name("body")
+            if body is None:
+                continue
+
+            header = source[node.start_byte : body.start_byte].rstrip()
+            span = (node.start_byte, node.start_byte + len(header), 0)
+            signatures.add(span)
+            skeleton.add(span)
+            previous = node.prev_named_sibling
+
+            while previous is not None and previous.type == "line_comment":
+                text = source[previous.start_byte : previous.end_byte].rstrip()
+                if not text.startswith(b"///") or text.startswith(b"////"):
+                    break
+                skeleton.add((previous.start_byte, previous.start_byte + len(text), 0))
+                previous = previous.prev_named_sibling
+
+        return FileAnalysis(
+            docstrings=docstrings,
+            imports=(),
+            sigs=tuple(sorted(signatures)),
+            skel=tuple(sorted(skeleton)),
+        )
 
     @staticmethod
     def resolve_imports(
@@ -131,12 +129,19 @@ class RustOutlineLanguage(Language):
         return []
 
     @staticmethod
-    def render_sigs(source: bytes) -> str:
-        return _render_functions(source, include_docs=False)
+    def render_skel(source: bytes, analysis: FileAnalysis) -> str:
+        if analysis.skel == ((0, len(source), 0),):
+            return source.decode("utf-8")
 
-    @staticmethod
-    def render_skel(source: bytes) -> str:
-        return _render_functions(source, include_docs=True)
+        headers = set(analysis.sigs)
+        parts = []
+
+        for span in analysis.skel:
+            start, end, column = span
+            text = (b" " * column + source[start:end]).decode("utf-8")
+            parts.append(text + " { ... }" if span in headers else text)
+
+        return "\n".join(parts)
 
 
 compiler = ContextCraft(
@@ -145,6 +150,10 @@ compiler = ContextCraft(
 )
 artifact = compiler.compile(".")
 ```
+
+`analyze()` parses once and stores byte spans. The class inherits the default
+`render_sigs(source, analysis)` method and overrides only skeleton formatting
+to add body placeholders. Neither renderer parses or queries again.
 
 For the sample function, `SIGS` returns:
 

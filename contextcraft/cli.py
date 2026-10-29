@@ -11,7 +11,6 @@ from time import perf_counter
 from typing import Annotated
 
 import ignore
-import tree_sitter as ts
 from cyclopts import App, CycloptsError, Group, Parameter
 from cyclopts.help import ColumnSpec, DefaultFormatter, PanelSpec, TableSpec
 from cyclopts.help.specs import DescriptionRenderer, NameRenderer
@@ -26,7 +25,7 @@ from contextcraft.formatter import ArtifactFormatter
 from contextcraft.graph import GraphBuilder, GraphScorer
 from contextcraft.imports import ImportResolver
 from contextcraft.index import Indexer
-from contextcraft.languages.python.language import PythonLanguage, get_py_grammar
+from contextcraft.languages.python.language import PythonLanguage
 from contextcraft.models import Artifact, FidelityLevel, Index, Source, Tiers
 from contextcraft.optimizer import BudgetAllocator
 from contextcraft.source import SourceLoader
@@ -283,6 +282,14 @@ def main(
             help="Redact recognized secrets before analysis",
         ),
     ] = True,
+    workers: Annotated[
+        int,
+        Parameter(
+            group=INPUT_GROUP,
+            alias="-j",
+            help="Positive worker count for parallel file loading and tier rendering",
+        ),
+    ] = 1,
     max_file_size_bytes: Annotated[
         int, Parameter(group=INPUT_GROUP, help="Maximum source file size in bytes")
     ] = DEFAULT_MAX_FILE_SIZE_BYTES,
@@ -300,6 +307,10 @@ def main(
     """
     if budget <= 0:
         stderr.print("error: --budget must be positive", style="red")
+        raise SystemExit(2)
+
+    if workers <= 0:
+        stderr.print("error: --workers must be positive", style="red")
         raise SystemExit(2)
 
     if max_file_size_bytes <= 0:
@@ -328,6 +339,7 @@ def main(
                         )
 
             config = Config(
+                workers=workers,
                 budget_tokens=budget,
                 output_format=output_format,
                 focus_query=focus,
@@ -440,9 +452,9 @@ def main(
             return
 
         source = path.read_bytes()
-        parser = ts.Parser(get_py_grammar())
-        skel = PythonLanguage.render_skel(source, parser)
-        sigs = PythonLanguage.render_sigs(source, parser)
+        analysis = PythonLanguage.analyze(source, 0)
+        skel = PythonLanguage.render_skel(source, analysis)
+        sigs = PythonLanguage.render_sigs(source, analysis)
         content = (
             "=== SKEL ===\n"
             + skel

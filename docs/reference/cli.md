@@ -18,6 +18,7 @@ budget or redacting secrets.
 
 | Option                                       | Description                                                                  | Default       |
 | :------------------------------------------- | :--------------------------------------------------------------------------- | :------------ |
+| `--workers`, `-j`                            | Positive worker count for parallel file loading and tier rendering           | `1`           |
 | `--budget`, `-b`                             | Positive integer token budget, without shorthand such as `16k`               | `16000`       |
 | `--encoding`, `-enc`, `--tokenizer-encoding` | Tiktoken encoding for token accounting                                       | `cl100k_base` |
 | `--focus`, `-f`                              | Query used to prefer relevant files                                          | None          |

@@ -8,7 +8,7 @@ IMPORT_QUERY = """
   module_name: [
     (dotted_name)
     (relative_import)
-  ] @import.source
+  ]
 ) @import.statement
 """
 
@@ -16,51 +16,42 @@ DOCSTRING_QUERY = """
 (module
   . (comment)*
   . (expression_statement
-    [(string) (concatenated_string) (parenthesized_expression)] @doc))
+    [(string) (concatenated_string) (parenthesized_expression)] @docstring))
 
 (class_definition
   body: (block
     . (comment)*
     . (expression_statement
-      [(string) (concatenated_string) (parenthesized_expression)] @doc)))
+      [(string) (concatenated_string) (parenthesized_expression)] @docstring)))
 
 (function_definition
   body: (block
     . (comment)*
     . (expression_statement
-      [(string) (concatenated_string) (parenthesized_expression)] @doc)))
+      [(string) (concatenated_string) (parenthesized_expression)] @docstring)))
 """
 
-SKEL_QUERY = """
-(class_definition
-  name: (identifier) @skel.class.name
-  ":" @header.end
-  body: (block) @skel.class.body) @header.start
-
-(function_definition
-  name: (identifier) @skel.function.name
-  parameters: (parameters) @skel.function.parameters
-  ":" @header.end
-  body: (block) @skel.function.body) @header.start
-
+SKEL_EXTRAS_QUERY = """
 (decorator) @decorator
 
 (class_definition
   body: (block
-    . (expression_statement (string)) @doc))
+    . (expression_statement (string)) @skel.doc))
 
 (function_definition
   body: (block
-    . (expression_statement (string)) @doc))
+    . (expression_statement (string)) @skel.doc))
 """
 
-SIGS_QUERY = """
+HEADER_QUERY = """
 (class_definition
-  name: (identifier) @sigs.class.name
+  name: (identifier)
   ":" @header.end) @header.start
 
 (function_definition
-  name: (identifier) @sigs.function.name
-  parameters: (parameters) @sigs.function.parameters
+  name: (identifier)
+  parameters: (parameters)
   ":" @header.end) @header.start
 """
+
+ANALYSIS_QUERY = IMPORT_QUERY + DOCSTRING_QUERY + HEADER_QUERY + SKEL_EXTRAS_QUERY

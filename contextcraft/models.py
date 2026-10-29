@@ -76,6 +76,20 @@ class Import(msgspec.Struct, frozen=True, kw_only=True):
     imported_names: tuple[str, ...] = ()
 
 
+class FileAnalysis(msgspec.Struct, frozen=True, kw_only=True):
+    """Store extracted metadata and outline spans from one source file.
+
+    Each SIGS or SKEL span is (start_byte, end_byte, indentation), in source
+    order. Offsets refer to the analyzed UTF-8 bytes, after any redaction.
+    No parse trees, nodes, or rendered text are retained.
+    """
+
+    docstrings: tuple[str, ...]
+    imports: tuple[Import, ...]
+    sigs: tuple[tuple[int, int, int], ...]
+    skel: tuple[tuple[int, int, int], ...]
+
+
 class ImportResolution(msgspec.Struct, frozen=True, kw_only=True):
     """Record targets, ambiguities, and unresolved names for one import.
 
@@ -111,12 +125,15 @@ class Source(msgspec.Struct, frozen=True, kw_only=True):
 
     Content and docstrings are keyed by file ID. Files skipped by the loader
     have no content entry. Source bytes are already redacted when that option
-    is enabled.
+    is enabled. Analyses hold metadata and outline spans by file ID for every
+    loaded file with a detected language. Renderers use these spans without
+    parsing again or caching rendered text.
     """
 
     content: dict[int, bytes] = msgspec.field(default_factory=dict)
     docstrings: dict[int, tuple[str, ...]] = msgspec.field(default_factory=dict)
     imports: tuple[Import, ...] = ()
+    analyses: dict[int, FileAnalysis] = msgspec.field(default_factory=dict)
 
 
 class Tiers(msgspec.Struct, frozen=True, kw_only=True):

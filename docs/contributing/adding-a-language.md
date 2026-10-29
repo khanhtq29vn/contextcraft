@@ -38,11 +38,17 @@ indexing, even if no source files for that language are detected.
 
 The pipeline passes UTF-8 bytes, already redacted when that option is enabled.
 
-- `extract_docstrings(source)` returns a tuple of docstring values used for
-  query matching. Return an empty tuple if none are supported.
-- `extract_imports(source, file_id)` returns `Import` records. Use the supplied
-  file ID as `source_file_id`, and preserve the module name, relative level,
-  and imported names needed by your resolver.
+Implement `analyze(source, file_id)` to return a `FileAnalysis` containing:
+
+- `docstrings`: a tuple of values used for query matching, or an empty tuple.
+- `imports`: a tuple of `Import` records. Use the supplied file ID as
+  `source_file_id`, and preserve the module name, relative level, and imported
+  names needed by your resolver.
+- `sigs` and `skel`: sorted, deduplicated `(start_byte, end_byte, indentation)`
+  spans for later rendering against the same UTF-8 bytes.
+
+Share parsing and query work within this call. Retain spans, not parse trees,
+Tree-sitter nodes, or rendered text.
 
 Handle incomplete source deliberately. For example, Python skips import
 statements with parse errors rather than treating them as reliable imports.
@@ -66,8 +72,9 @@ each source file's project root and recognizes packages with `__init__.py` or
 
 ## Render useful outlines
 
-Implement `render_sigs(source)` for a compact declaration outline and
-`render_skel(source)` for declarations with retained documentation. Preserve
+The default `render_sigs(source, analysis)` and `render_skel(source, analysis)`
+methods slice and join the stored spans. Override them only when the language
+needs different output formatting, without parsing or querying again. Preserve
 source order and enough nesting to make the result understandable. Outlines do
 not need to be executable source.
 

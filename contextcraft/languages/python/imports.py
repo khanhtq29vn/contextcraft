@@ -23,29 +23,22 @@ def _import_name(source: bytes, node: ts.Node) -> str:
     )
 
 
-def extract_imports(
-    source: bytes, file_id: int, parser: ts.Parser, query: ts.Query
-) -> list[Import]:
+def extract_imports(source: bytes, file_id: int, nodes: list[ts.Node]) -> list[Import]:
     """Return import records in source order, including nested imports.
 
     Args:
         source: UTF-8 Python source bytes to parse.
         file_id: Index file ID assigned to every returned record.
-        parser: Parser configured with the Python grammar.
-        query: Query that captures import statements as import.statement.
+        nodes: Captured import statement nodes.
 
     Returns:
         Import records with original module names rather than aliases.
         Relative imports retain the number of leading dots, and wildcard
         imports use '*'. Statements with parse errors are skipped.
     """
-    tree = parser.parse(source)
-    captures = ts.QueryCursor(query).captures(tree.root_node)
     records = []
 
-    for statement in sorted(
-        captures.get("import.statement", []), key=lambda node: node.start_byte
-    ):
+    for statement in sorted(nodes, key=lambda node: node.start_byte):
         if statement.has_error:
             continue
 

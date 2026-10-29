@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from contextcraft.models import File, Import, ImportResolution, ModuleRoot
+from contextcraft.models import File, FileAnalysis, Import, ImportResolution, ModuleRoot
+
+
+def _render_spans(source: bytes, spans: tuple[tuple[int, int, int], ...]) -> str:
+    parts = [b" " * column + source[start:end] for start, end, column in spans]
+
+    return b"\n".join(parts).decode("utf-8")
 
 
 class Language(ABC):
@@ -53,14 +59,12 @@ class Language(ABC):
 
     @staticmethod
     @abstractmethod
-    def extract_docstrings(source: bytes) -> tuple[str, ...]:
-        """Return docstring text extracted from UTF-8 source bytes."""
-        ...
+    def analyze(source: bytes, file_id: int) -> FileAnalysis:
+        """Extract metadata and outline spans once from UTF-8 source bytes.
 
-    @staticmethod
-    @abstractmethod
-    def extract_imports(source: bytes, file_id: int) -> list[Import]:
-        """Extract imports from source and associate each one with file_id."""
+        Return sorted, deduplicated spans for later rendering against the same
+        bytes. Associate imports with file_id. Do not retain parse trees or nodes.
+        """
         ...
 
     @staticmethod
@@ -78,13 +82,11 @@ class Language(ABC):
         ...
 
     @staticmethod
-    @abstractmethod
-    def render_sigs(input: bytes) -> str:
-        """Return a declaration outline from UTF-8 source bytes."""
-        ...
+    def render_sigs(source: bytes, analysis: FileAnalysis) -> str:
+        """Render declaration spans against their analyzed bytes without parsing."""
+        return _render_spans(source, analysis.sigs)
 
     @staticmethod
-    @abstractmethod
-    def render_skel(source: bytes) -> str:
-        """Return an outline with declarations and retained documentation."""
-        ...
+    def render_skel(source: bytes, analysis: FileAnalysis) -> str:
+        """Render skeleton spans against their analyzed bytes without parsing."""
+        return _render_spans(source, analysis.skel)
