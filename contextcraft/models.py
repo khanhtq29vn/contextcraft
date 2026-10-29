@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 import msgspec
 
+from contextcraft.config import OutputFormat, TokenizerEncoding
+
 if TYPE_CHECKING:
     from contextcraft.languages.base import Language
 
@@ -29,10 +31,15 @@ class FidelityLevel(IntEnum):
 
 
 class RenderedTier(msgspec.Struct, frozen=True, kw_only=True):
-    """Store rendered file content and its unframed token count."""
+    """Store rendered content with content-only and framed token counts.
+
+    Framed tokens include format-specific file headers, escaping, and separators,
+    using the format and encoding recorded in Tiers. TREE has zero framed cost.
+    """
 
     content: str
     tokens: int
+    framed_tokens: int
 
 
 class Artifact(msgspec.Struct, frozen=True, kw_only=True):
@@ -141,8 +148,12 @@ class Tiers(msgspec.Struct, frozen=True, kw_only=True):
 
     Every file has a TREE tier, but only files with loaded source have higher
     tiers. The token_counts_estimated flag is true if any count used an estimate.
+    Allocation and formatting must use the recorded output format and encoding,
+    and the same index, because framed costs depend on paths as well as content.
     """
 
+    output_format: OutputFormat
+    tokenizer_encoding: TokenizerEncoding
     files: dict[int, dict[FidelityLevel, RenderedTier]] = msgspec.field(
         default_factory=dict
     )

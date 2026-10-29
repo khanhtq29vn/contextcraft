@@ -1,91 +1,34 @@
-"""Count tokens and render file representations at each fidelity level."""
+"""Render file representations and count content and framed tokens."""
 
 from __future__ import annotations
 
-import re
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 
-import tiktoken
-
-from contextcraft.config import Config, TokenizerEncoding
+from contextcraft.config import Config
+from contextcraft.formatter import ArtifactFormatter
 from contextcraft.models import FidelityLevel, Index, RenderedTier, Source, Tiers
-
-
-class TokenCounter:
-    """Count tokens with an optional fallback estimate.
-
-    Args:
-        encoding: Tiktoken encoding to use. Loading it may download encoding data.
-        allow_estimates: Fall back to an estimate if loading or encoding fails.
-            An invalid encoding name still raises ValueError.
-
-    Attributes:
-        used_estimates: True once any count on this instance uses an estimate;
-            subsequent calls do not reset it.
-    """
-
-    def __init__(
-        self,
-        encoding: TokenizerEncoding,
-        *,
-        allow_estimates: bool = True,
-    ) -> None:
-        self.allow_estimates = allow_estimates
-        self.used_estimates = False
-        self.encoder: tiktoken.Encoding | None
-
-        try:
-            self.encoder = tiktoken.get_encoding(encoding.value)
-        except ValueError:
-            raise
-        except Exception:
-            if not allow_estimates:
-                raise
-
-            self.encoder = None
-
-    def count(self, content: str) -> int:
-        """Return the token count for content, or zero for empty content.
-
-        Special-token text is counted as ordinary text. Encoding errors
-        propagate unless estimates are enabled. An estimate sets used_estimates
-        and cannot guarantee that the output fits a strict token budget.
-        """
-        if not content:
-            return 0
-
-        if self.encoder is not None:
-            try:
-                return len(self.encoder.encode(content, disallowed_special=()))
-            except Exception:
-                if not self.allow_estimates:
-                    raise
-
-        self.used_estimates = True
-        pieces = len(re.findall(r"[A-Za-z0-9_]+|[^\sA-Za-z0-9_]", content))
-        byte_estimate = max(1, len(content.encode("utf-8")) // 4)
-
-        return max(pieces, byte_estimate)
+from contextcraft.tokens import TokenCounter
 
 
 class TierRenderer:
     """Render file tiers with the language implementations recorded in the index."""
 
     def render(self, index: Index, source: Source, config: Config) -> Tiers:
-        """Render available file tiers and count tokens without output framing.
+        """Render available file tiers and count content and framed tokens.
 
         Args:
             index: Files to render and their detected languages.
             source: Loaded bytes keyed by index file ID.
-            config: Tokenizer encoding, estimate policy, and worker count.
+            config: Output format, tokenizer encoding, estimate policy, and workers.
 
         Returns:
             A TREE tier for every file, plus FULL, SKEL, and SIGS tiers for
             files with loaded source. Files with no detected language reuse
             full source. If a compressed rendering is empty or larger than
-            the next richer tier, it reuses that tier instead. Higher fidelity
-            therefore never has a lower content token count.
+            the next richer tier, it reuses that tier's content instead. Higher
+            fidelity therefore never has a lower content token count. Framed
+            costs are counted separately for each tier's label and output format.
 
         Raises:
             ValueError: If the worker count is not positive.
@@ -99,7 +42,8 @@ class TierRenderer:
             allow_estimates=config.allow_token_estimates,
         )
 
-        tree = RenderedTier(content="", tokens=0)
+        formatter = ArtifactFormatter()
+        tree = RenderedTier(content="", tokens=0, framed_tokens=0)
         tiers = {}
         estimated = False
 
@@ -121,8 +65,15 @@ class TierRenderer:
                 if config.workers > 1
                 else counter
             )
+            path = file.path.relative_to(index.path).as_posix()
             content = source_bytes.decode("utf-8")
-            higher = RenderedTier(content=content, tokens=file_counter.count(content))
+            higher = RenderedTier(
+                content=content,
+                tokens=file_counter.count(content),
+                framed_tokens=formatter.file_cost(
+                    path, content, FidelityLevel.FULL, file_counter, config
+                ),
+            )
             file_tiers[FidelityLevel.FULL] = higher
             language = (
                 index.languages[file.language_id]
@@ -131,7 +82,8 @@ class TierRenderer:
             )
 
             for level in (FidelityLevel.SKEL, FidelityLevel.SIGS):
-                tier = higher
+                tier_content = higher.content
+                tier_tokens = higher.tokens
 
                 if language is not None:
                     analysis = source.analyses[file_id]
@@ -144,8 +96,16 @@ class TierRenderer:
                     tokens = file_counter.count(content)
 
                     if content.strip() and tokens <= higher.tokens:
-                        tier = RenderedTier(content=content, tokens=tokens)
+                        tier_content = content
+                        tier_tokens = tokens
 
+                tier = RenderedTier(
+                    content=tier_content,
+                    tokens=tier_tokens,
+                    framed_tokens=formatter.file_cost(
+                        path, tier_content, level, file_counter, config
+                    ),
+                )
                 file_tiers[level] = tier
                 higher = tier
 
@@ -171,4 +131,9 @@ class TierRenderer:
                 tiers[file_id] = file_tiers
                 estimated |= file_estimated
 
-        return Tiers(files=tiers, token_counts_estimated=estimated)
+        return Tiers(
+            output_format=config.output_format,
+            tokenizer_encoding=config.tokenizer_encoding,
+            files=tiers,
+            token_counts_estimated=estimated,
+        )

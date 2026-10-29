@@ -8,7 +8,7 @@ from xml.etree import ElementTree as ET
 
 from contextcraft.config import Config, OutputFormat
 from contextcraft.models import Artifact, FidelityLevel, Index, Selection, Tiers
-from contextcraft.tiers import TokenCounter
+from contextcraft.tokens import TokenCounter
 
 
 class ArtifactFormatter:
@@ -16,16 +16,11 @@ class ArtifactFormatter:
 
     def _render_file(
         self,
-        index: Index,
-        tiers: Tiers,
-        file_id: int,
+        path: str,
+        content: str,
         level: FidelityLevel,
         config: Config,
     ) -> str:
-        file = index.files[file_id]
-        path = file.path.relative_to(index.path).as_posix()
-        content = tiers.files[file_id][level].content
-
         if config.output_format == OutputFormat.JSON:
             return json.dumps(
                 {"path": path, "tier": level.name, "content": content},
@@ -47,23 +42,23 @@ class ArtifactFormatter:
 
     def file_cost(
         self,
-        index: Index,
-        tiers: Tiers,
-        file_id: int,
+        path: str,
+        content: str,
         level: FidelityLevel,
         counter: TokenCounter,
         config: Config,
     ) -> int:
         """Return a file's token cost at the requested tier, including framing.
 
-        TREE costs zero because paths have a separate budget. JSON costs include
+        Pass a repository-relative path and rendered text. TREE costs zero
+        because paths have a separate budget. JSON costs include
         a trailing comma. Use the same counter and config as for the final output,
         but note that joining blocks may change how they tokenize.
         """
         if level == FidelityLevel.TREE:
             return 0
 
-        block = self._render_file(index, tiers, file_id, level, config)
+        block = self._render_file(path, content, level, config)
 
         return counter.count(
             block + ("," if config.output_format == OutputFormat.JSON else "")
@@ -91,7 +86,12 @@ class ArtifactFormatter:
             listed in tree are counted in the omitted-path total.
         """
         blocks = [
-            self._render_file(index, tiers, file_id, level, config)
+            self._render_file(
+                index.files[file_id].path.relative_to(index.path).as_posix(),
+                tiers.files[file_id][level].content,
+                level,
+                config,
+            )
             for file_id, level in sorted(selections.items())
             if level != FidelityLevel.TREE
         ]
@@ -191,10 +191,17 @@ class ArtifactFormatter:
 
         Raises:
             ValueError: If selection does not cover exactly the indexed files,
-                or even empty output framing exceeds the budget.
+                the format or encoding differs from the rendered tiers, or even
+                empty output framing exceeds the budget.
         """
         if set(selection.tiers) != set(index.files):
             raise ValueError("Allocate file tiers before formatting")
+
+        if (
+            tiers.output_format != config.output_format
+            or tiers.tokenizer_encoding != config.tokenizer_encoding
+        ):
+            raise ValueError("Render tiers with the same output format and encoding")
 
         counter = TokenCounter(
             config.tokenizer_encoding,
@@ -203,13 +210,6 @@ class ArtifactFormatter:
 
         selections = dict(selection.tiers)
         tree = self.directory_tree(index, tiers, counter, config)
-        costs = {
-            file_id: {
-                level: self.file_cost(index, tiers, file_id, level, counter, config)
-                for level in tiers.files[file_id]
-            }
-            for file_id in index.files
-        }
 
         while True:
             content = self.render(index, tiers, selections, tree, config)
@@ -221,10 +221,18 @@ class ArtifactFormatter:
             downgrades = []
 
             for file_id, current in selections.items():
-                for level in tiers.files[file_id]:
-                    savings = costs[file_id][current] - costs[file_id][level]
+                if current == FidelityLevel.TREE:
+                    continue
 
-                    if level < current and savings > 0:
+                file_tiers = tiers.files[file_id]
+
+                for level, tier in file_tiers.items():
+                    if level >= current:
+                        continue
+
+                    savings = file_tiers[current].framed_tokens - tier.framed_tokens
+
+                    if savings > 0:
                         loss = scores[file_id] * (
                             current.semantic_utility - level.semantic_utility
                         )

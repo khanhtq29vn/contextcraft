@@ -121,10 +121,10 @@ added cost, measured above empty document framing, fits within one tenth of
 $B$. The allocator reserves the resulting overhead and shortens the listing if
 necessary, raising `ValueError` if even empty framing cannot fit.
 
-Starting from `TREE` for every file, the allocator measures richer tiers with
-their format-specific framing and escaping included. It then takes a running
-maximum across increasing fidelity so that a richer tier never appears cheaper
-during allocation.
+Starting from `TREE` for every file, the allocator reads the tier renderer's
+precomputed costs, including format-specific framing and escaping. It takes a
+running maximum across increasing fidelity so that a richer tier never appears
+cheaper during allocation.
 
 For an upgrade from tier $l$ to $l'$, the priority is
 

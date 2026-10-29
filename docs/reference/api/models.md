@@ -55,10 +55,14 @@ be executable source.
 ```
 
 - `RenderedTier.content` is file text. `tokens` counts that text without output
-  framing.
+  framing. `framed_tokens` counts the serialized file block, including headers,
+  escaping, and any JSON separator. `TREE` has zero framed cost.
 - `Tiers.files` maps each file ID to its available `FidelityLevel` and
   `RenderedTier` pairs. Every indexed file has a zero-content, zero-token `TREE`
   tier. Files rejected during loading have no higher tiers.
+- `Tiers.output_format` and `Tiers.tokenizer_encoding` identify the settings used
+  to count costs. Allocation and formatting reject mismatched settings. Keep the
+  same index, since framed costs also depend on relative file paths.
 - `Selection.tiers` maps file IDs to the levels chosen by the allocator, before
   the formatter's final budget check.
 - `Tiers.token_counts_estimated` and `Selection.token_counts_estimated` record

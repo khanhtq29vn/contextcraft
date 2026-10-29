@@ -81,14 +81,17 @@ implementations produce the outlines, while files with no detected language
 reuse full text. An empty or oversized outline falls back to the next richer
 tier.
 
-At this stage, token counts cover content alone, leaving escaping, headers,
-fences, and separators to be accounted for during allocation and formatting.
+Each tier stores both its content-only token count and its framed cost,
+including escaping, headers, fences, and separators for the configured output
+format. File workers calculate these costs during rendering. Even when tiers
+share content, their labels can give them different framed costs.
 
 ## Allocate and format
 
 Starting with every file at `TREE`, `BudgetAllocator` weighs each rank against
 the cost of richer tiers and chooses upgrades that offer more weighted utility
-per added token. The method is a heuristic rather than an exact knapsack
+per added token. It reads the precomputed framed costs rather than tokenizing
+every tier again. The method is a heuristic rather than an exact knapsack
 solver.
 
 `ArtifactFormatter` serializes the selected tiers and counts the complete

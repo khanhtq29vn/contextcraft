@@ -61,15 +61,25 @@ no detected language retain their source without language-specific analysis.
    :members: file_cost, render, directory_tree, format
 ```
 
-Allocation chooses tiers using framed token costs, but the complete serialized
-output is checked by `ArtifactFormatter.format()`, which may downgrade tiers
-or shorten the path listing to fit. Calling `render()` alone skips this budget
-enforcement.
+Tier rendering counts both content-only tokens and framed file costs, using
+its file workers. Allocation reads those costs instead of tokenizing every tier
+again. Formatting also reuses them when choosing downgrades, but counts the
+complete serialized output to enforce the budget. Joining blocks can change
+token boundaries, so precomputed file costs alone cannot guarantee a fit.
+
+Use the same index, output format, and tokenizer encoding for rendering,
+allocation, and formatting. A format or encoding mismatch raises `ValueError`.
+Changing either requires rendering tiers again. Calling `render()` alone skips
+budget enforcement.
+
+`ArtifactFormatter.file_cost(path, content, level, counter, config)` counts one
+file block using a repository-relative path and its rendered text. The tier
+renderer uses it before the full `Tiers` record exists.
 
 ## Token counting
 
 ```{eval-rst}
-.. py:class:: contextcraft.tiers.TokenCounter(encoding: contextcraft.config.TokenizerEncoding, *, allow_estimates: bool = True)
+.. py:class:: contextcraft.tokens.TokenCounter(encoding: contextcraft.config.TokenizerEncoding, *, allow_estimates: bool = True)
 
    Count tokens with the requested encoding and an optional fallback estimate.
    The ``used_estimates`` attribute stays true after any call uses an estimate.

@@ -8,7 +8,7 @@ import math
 from contextcraft.config import Config
 from contextcraft.formatter import ArtifactFormatter
 from contextcraft.models import FidelityLevel, Index, Selection, Tiers
-from contextcraft.tiers import TokenCounter
+from contextcraft.tokens import TokenCounter
 
 
 class BudgetAllocator:
@@ -21,7 +21,7 @@ class BudgetAllocator:
 
         Args:
             index: Files to allocate.
-            tiers: Rendered tiers for exactly the indexed files.
+            tiers: Rendered tiers and framed costs for exactly the indexed files.
             scores: Finite, nonnegative weights for exactly the indexed files.
             config: Positive token budget, output format, and tokenizer options.
 
@@ -32,13 +32,20 @@ class BudgetAllocator:
 
         Raises:
             ValueError: If the budget, file coverage, scores, or TREE tiers
-                are invalid, or output framing cannot fit the budget.
+                are invalid, the format or encoding differs from the rendered
+                tiers, or output framing cannot fit the budget.
         """
         if config.budget_tokens <= 0:
             raise ValueError("Token budget must be positive")
 
         if set(tiers.files) != set(index.files) or set(scores) != set(index.files):
             raise ValueError("Render tiers and score all files before allocation")
+
+        if (
+            tiers.output_format != config.output_format
+            or tiers.tokenizer_encoding != config.tokenizer_encoding
+        ):
+            raise ValueError("Render tiers with the same output format and encoding")
 
         if any(not math.isfinite(score) or score < 0 for score in scores.values()):
             raise ValueError("File scores must be finite and nonnegative")
@@ -74,10 +81,7 @@ class BudgetAllocator:
 
             for level in sorted(file_tiers):
                 # Escaping can change token costs; use a monotonic upper bound.
-                previous = max(
-                    previous,
-                    formatter.file_cost(index, tiers, file_id, level, counter, config),
-                )
+                previous = max(previous, file_tiers[level].framed_tokens)
 
                 costs[file_id][level] = previous
 

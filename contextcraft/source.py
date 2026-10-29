@@ -9,6 +9,8 @@ from contextlib import nullcontext
 from contextcraft.config import Config
 from contextcraft.models import FileAnalysis, Index, Source
 
+_BINARY_CONTROL_RE = re.compile(rb"[\x00-\x08\x0b\x0e-\x1f]")
+
 _SECRET_PATTERNS = (
     re.compile(
         rb"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z0-9 ]*PRIVATE KEY-----"
@@ -82,9 +84,7 @@ class SourceLoader:
             with file.path.open("rb") as stream:
                 source = stream.read(limit + 1)
 
-            if len(source) > limit or any(
-                byte < 32 and byte not in (9, 10, 12, 13) for byte in source
-            ):
+            if len(source) > limit or _BINARY_CONTROL_RE.search(source):
                 return None
 
             try:
