@@ -1,0 +1,19 @@
+---
+interface Props {
+  setting: { name: string; default: string; meaning: string };
+}
+
+const { setting } = Astro.props;
+---
+
+<div class="cc-setting" id={setting.name}>
+  <dt>
+    <a class="cc-setting-anchor" href={`#${setting.name}`}><code
+      >{setting.name}</code></a>
+  </dt>
+  <dd class="cc-setting-default">
+    <span class="cc-setting-default-label">Default: </span><code
+    >{setting.default}</code>
+  </dd>
+  <dd>{setting.meaning}</dd>
+</div>

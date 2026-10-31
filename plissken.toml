@@ -1,0 +1,16 @@
+[project]
+name = "contextcraft-ai"
+version_from = "cargo"
+
+[output]
+format = "markdown"
+path = "docs/src/content/docs/reference/api"
+template = "starlight"
+
+[rust]
+crates = ["crates/contextcraft_core", "binding_python"]
+
+[python]
+package = "contextcraft"
+source = "binding_python/python/contextcraft"
+auto_discover = true

@@ -1,0 +1,27 @@
+---
+import settings from "../data/settings.json";
+import ConfigurationEntry from "./ConfigurationEntry.astro";
+
+interface Props {
+  names: string[];
+}
+
+const { names } = Astro.props;
+if (!names.length || new Set(names).size !== names.length) {
+  throw new Error("Configuration groups require distinct setting names.");
+}
+const selected = names.map((name) => {
+  const setting = settings.find((entry) => entry.name === name);
+  if (!setting) throw new Error(`Unknown configuration setting: ${name}`);
+  return setting;
+});
+---
+
+<div class="cc-settings-group">
+  <div class="cc-settings-head" aria-hidden="true">
+    <span>Attribute</span><span>Default</span><span>Meaning</span>
+  </div>
+  <dl class="cc-settings-list">
+    {selected.map((setting) => <ConfigurationEntry setting={setting} />)}
+  </dl>
+</div>

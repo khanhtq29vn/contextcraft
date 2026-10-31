@@ -1,0 +1,67 @@
+[workspace]
+resolver = "3"
+members = ["binding_python", "crates/*"]
+
+[workspace.package]
+version = "0.3.2"
+edition = "2024"
+description = "AST-Aware, Personalized-PageRank-Ranked, Token-Budgeted Codebase Compressor for LLMs"
+license = "MIT"
+repository = "https://github.com/khanhtq29vn/contextcraft"
+homepage = "https://github.com/khanhtq29vn/contextcraft"
+keywords = ["llm", "context-compression", "ast", "tree-sitter", "code-analysis"]
+categories = ["development-tools", "text-processing"]
+
+[workspace.dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
+contextcraft_core = { package = "contextcraft-ai-core", path = "crates/contextcraft_core" }
+globset = "0.4.21"
+ignore = "0.4.34"
+la-arena = "0.3.1"
+leakguard = { version = "1.0", features = ["parallel"] }
+pep508_rs = "0.9.2"
+petgraph = "0.8.3"
+rayon = "1.12.0"
+regex = "1.13.1"
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+semver = "1.0.28"
+thiserror = "2.0.21"
+tiktoken = { version = "4.1.2", default-features = false, features = ["vocab-openai"] }
+toml = "1.1.8"
+tree-sitter = "0.27.1"
+tree-sitter-c = "0.24.2"
+tree-sitter-cpp = "0.23.4"
+tree-sitter-go = "0.25.0"
+tree-sitter-html = "0.23.2"
+tree-sitter-json = "0.24.8"
+tree-sitter-javascript = "0.25.0"
+tree-sitter-md = "0.5.4"
+tree-sitter-python = "0.25.0"
+tree-sitter-elixir = "0.3.5"
+tree-sitter-kotlin-ng = "1.1.0"
+tree-sitter-zig = "1.1.2"
+tree-sitter-vue-next = "0.1.0"
+tree-sitter-svelte-ng = "1.0.2"
+tree-sitter-rust = "0.24.2"
+tree-sitter-typescript = "0.23.2"
+tree-sitter-toml-ng = "0.7.0"
+tree-sitter-yaml = "0.7.2"
+tree-sitter-bash = "0.25.1"
+tree-sitter-c-sharp = "0.23.5"
+tree-sitter-lua = "0.5.0"
+tree-sitter-ruby = "0.23.1"
+tree-sitter-scala = "0.26.3"
+tree-sitter-swift = "0.7.4"
+roxmltree = "0.21.2"
+apple-plist = { version = "1.0.1", default-features = false, features = ["openstep"] }
+tree-sitter-graphql = "0.3.0"
+tree-sitter-hcl = "1.1.0"
+tree-sitter-containerfile = "0.9.2"
+tree-sitter-make = "1.1.1"
+tree-sitter-just = { git = "https://github.com/irevoire/tree-sitter-just", branch = "stop-depending-on-tree-sitter-directly" }
+tree-sitter-rst = "0.2.0"
+tree-sitter-css = "0.25.0"
+tree-sitter-scss = { package = "tree-sitter-scss-modern", version = "0.1.1" }
+tree-sitter-proto = "0.6.0"
+tree-sitter-cmake = "0.7.6"
+tree-sitter-postgres = "1.2.4"

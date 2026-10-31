@@ -1,0 +1,78 @@
+---
+import Select from "@astrojs/starlight/components/Select.astro";
+
+interface Props {
+  home?: boolean;
+}
+const { home = false } = Astro.props;
+const translate = (key: string, fallback: string) =>
+  typeof Astro.locals.t === "function"
+    ? Astro.locals.t(key as Parameters<typeof Astro.locals.t>[0])
+    : fallback;
+---
+
+<starlight-theme-select inert class:list={{ "home-theme-picker": home }}>
+  <Select
+    icon="laptop"
+    label={translate("themeSelect.accessibleLabel", "Select theme")}
+    width="6.25em"
+    options={[
+      {
+        label: translate("themeSelect.dark", "Dark"),
+        value: "dark",
+        selected: false,
+      },
+      {
+        label: translate("themeSelect.light", "Light"),
+        value: "light",
+        selected: false,
+      },
+      {
+        label: translate("themeSelect.auto", "Auto"),
+        value: "auto",
+        selected: true,
+      },
+    ]}
+  />
+</starlight-theme-select>
+
+<script>
+type ThemeProvider = {
+  updatePickers: () => void;
+  setTheme: (theme: string | null, persist?: boolean) => void;
+  getPreference: () => string;
+  system: MediaQueryList | null;
+  storageKey: string;
+};
+const provider =
+  (window as typeof window & { StarlightThemeProvider: ThemeProvider })
+    .StarlightThemeProvider;
+provider.updatePickers();
+
+document.querySelectorAll<HTMLSelectElement>("starlight-theme-select select")
+  .forEach((select) => {
+    select.addEventListener("change", () => provider.setTheme(select.value));
+    select.addEventListener(
+      "pointerdown",
+      () => select.setAttribute("data-pointer-focus", ""),
+    );
+    const restoreKeyboardFocus = () =>
+      select.removeAttribute("data-pointer-focus");
+    select.addEventListener("keydown", restoreKeyboardFocus);
+    select.addEventListener("blur", restoreKeyboardFocus);
+    select.closest("starlight-theme-select")?.removeAttribute("inert");
+  });
+
+const followSystem = () => {
+  if (provider.getPreference() === "auto") provider.setTheme("auto", false);
+};
+if (provider.system?.addEventListener) {
+  provider.system.addEventListener("change", followSystem);
+} else provider.system?.addListener?.(followSystem);
+
+window.addEventListener("storage", (event) => {
+  if (event.key === provider.storageKey || event.key === null) {
+    provider.setTheme(event.newValue, false);
+  }
+});
+</script>

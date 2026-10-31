@@ -1,36 +1,46 @@
-# Byte-compiled / optimized / DLL files
+# Rust build output
+/target/
+
+# Build output and distributions
+build/
+dist/
+sdist/
+wheels/
+share/python-wheels/
+
+# Python bytecode and extensions
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions & distribution packaging
 *.so
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
+
+# Python packaging
+*.egg
+*.egg-info/
 .eggs/
+eggs/
+develop-eggs/
+downloads/
 lib/
 lib64/
 parts/
-sdist/
 var/
-wheels/
-share/python-wheels/
-*.egg-info/
 .installed.cfg
-*.egg
 MANIFEST
 
-# Virtual environments & uv
+# Virtual environments and local configuration
 .venv/
 venv/
 ENV/
 env/
 .python-version
+.env
+.env.*
 
-# Testing & coverage artifacts
+# Node.js dependencies
+node_modules/
+
+# Testing, linting, and coverage
 .coverage
 .coverage.*
 htmlcov/
@@ -41,26 +51,24 @@ htmlcov/
 .ruff_cache/
 .hypothesis/
 
-# ContextCraft runtime cache & outputs
+# Documentation build output
+site/
+docs/_build/
+
+# ContextCraft caches and output
 .contextcraft_cache/
 .aider.tags.cache*/
 context_output.md
 context_output.xml
 context_output.json
 
-# Documentation build
-site/
-docs/_build/
-
-# JetBrains PyCharm (Ignore workspace state, keep shared runConfigurations)
+# JetBrains workspace state; keep shared run configurations
 .idea/*
 !.idea/runConfigurations/
 !.idea/runConfigurations/*.xml
 
-# OS & Editor files
+# OS and editor files
 .DS_Store
 Thumbsumbs.db
 *.swp
 *~
-.env
-.env.*

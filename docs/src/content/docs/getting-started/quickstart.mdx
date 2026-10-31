@@ -1,0 +1,97 @@
+---
+title: Your first context file
+description: Install the CLI, generate context from a repository, and review the result.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+You’ll create a Markdown file containing selected source and structure from a local repository. You need Python 3.10 or newer and a repository directory you can read.
+
+## Install the CLI
+
+Choose how to run the CLI. Your choice applies to the commands below.
+
+<Tabs syncKey="contextcraft-cli-runner">
+<TabItem label="uvx">
+
+With [uv installed](https://docs.astral.sh/uv/getting-started/installation/), run the CLI in an isolated environment without installing it into your project:
+
+```sh
+uvx --from "contextcraft-ai[cli]" contextcraft --help
+```
+
+</TabItem>
+<TabItem label="pip">
+
+Install the CLI into your Python environment:
+
+```sh
+pip install "contextcraft-ai[cli]"
+contextcraft --help
+```
+
+If your environment uses `python3`, you can install with `python3 -m pip install "contextcraft-ai[cli]"`.
+
+</TabItem>
+</Tabs>
+
+See [installation](../installation/) for SDK-only setup and workspace development.
+
+## Generate context
+
+Open a terminal in your repository and run:
+
+<Tabs syncKey="contextcraft-cli-runner">
+<TabItem label="uvx">
+
+```sh
+uvx --from "contextcraft-ai[cli]" contextcraft . --budget 8k --focus "authentication" -o context.md
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```sh
+contextcraft . --budget 8k --focus "authentication" -o context.md
+```
+
+</TabItem>
+</Tabs>
+
+- `.` selects the current directory. You can pass another local directory instead.
+- `--budget 8k` limits the complete artifact to 8,000 tokens.
+- `--focus` supplies a task description to influence relevance.
+- `-o` writes the result to `context.md`.
+
+Replace “authentication” with your task, or omit `--focus` for a general view. The CLI accepts directories, not individual files or remote URLs.
+
+## Review and use the result
+
+Open `context.md` and check which code is included before sharing it with your language model. ContextCraft chooses a level of detail for each file. See [understand the output](../output/) to learn what each level retains.
+
+The compilation summary goes to stderr and includes budget usage and fidelity counts. The artifact goes to the output file, or stdout when no file is specified.
+
+:::note[Review sensitive source]
+Recognized secrets are redacted by default, but detection does not cover every secret. Review the artifact before sharing it.
+:::
+
+## Try a different budget
+
+<Tabs syncKey="contextcraft-cli-runner">
+<TabItem label="uvx">
+
+```sh
+uvx --from "contextcraft-ai[cli]" contextcraft . --budget 16k --focus "authentication" -o context.md
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```sh
+contextcraft . --budget 16k --focus "authentication" -o context.md
+```
+
+</TabItem>
+</Tabs>
+
+This overwrites the existing output file. A larger budget allows more source detail, but does not guarantee that any specific file is included. Continue with [token budgets](../../guides/token-budgets/) or the [Python SDK](../../python/quickstart/).
