@@ -33,7 +33,8 @@ class SDKTests(unittest.TestCase):
         for root in (self.root, str(self.root)):
             with self.subTest(root=root):
                 analysis = ContextCraft().run(root)
-                self.assertEqual(analysis.index.root, self.root.resolve())
+                self.assertTrue(analysis.index.root.is_absolute())
+                self.assertTrue(analysis.index.root.samefile(self.root))
                 self.assertEqual(len(analysis.index.files), 2)
                 self.assertGreater(analysis.artifact.tokens, 0)
 

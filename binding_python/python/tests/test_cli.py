@@ -22,7 +22,9 @@ class CLITests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        (self.root / "main.py").write_text("print('café 日本語')\n", encoding="utf-8")
+        (self.root / "main.py").write_text(
+            "print('café 日本語')\n", encoding="utf-8", newline="\n"
+        )
 
     def run_cli(self, *arguments: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
