@@ -1,0 +1,17 @@
+[package]
+name = "contextcraft-ai"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+name = "contextcraft"
+crate-type = ["cdylib"]
+
+[dependencies]
+contextcraft_core.workspace = true
+rayon.workspace = true
+pyo3 = { version = "0.29.0", features = ["abi3-py310"] }

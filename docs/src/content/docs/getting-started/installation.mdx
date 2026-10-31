@@ -1,0 +1,72 @@
+---
+title: Installation
+description: Install the optional CLI or the Python SDK backed by the Rust core.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+ContextCraft requires Python 3.10 or newer. Install it into the Python environment where you plan to use it.
+
+## CLI and SDK
+
+<Tabs syncKey="contextcraft-package-manager">
+<TabItem label="uv">
+
+In your [uv project](https://docs.astral.sh/uv/guides/projects/), run:
+
+```sh
+uv add "contextcraft-ai[cli]"
+uv run contextcraft --help
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```sh
+pip install "contextcraft-ai[cli]"
+contextcraft --help
+```
+
+</TabItem>
+</Tabs>
+
+The `cli` extra adds Cyclopts and Rich for argument parsing and terminal output.
+
+## SDK only
+
+<Tabs syncKey="contextcraft-package-manager">
+<TabItem label="uv">
+
+In your [uv project](https://docs.astral.sh/uv/guides/projects/), run:
+
+```sh
+uv add contextcraft-ai
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```sh
+pip install contextcraft-ai
+```
+
+</TabItem>
+</Tabs>
+
+The SDK uses the native Rust core and has no Python runtime dependencies. See the [Python quickstart](../../python/quickstart/) for a complete example.
+
+## From a source checkout
+
+From the ContextCraft workspace root:
+
+```sh
+uv sync --package contextcraft-ai --extra cli --group dev
+uv run --package contextcraft-ai --extra cli --group dev maturin develop --manifest-path binding_python/Cargo.toml
+uv run --package contextcraft-ai --extra cli contextcraft --help
+```
+
+These commands build the native bindings and require a Rust toolchain. Use them when working from a source checkout rather than installing a published package.
+
+## Check your environment
+
+If the command is unavailable, try `python -m contextcraft --help` using the same Python environment where you installed the package. If it asks for CLI dependencies, reinstall with the `[cli]` extra. More recovery steps are in [troubleshooting](../../guides/troubleshooting/).

@@ -1,115 +1,185 @@
 # Contributing to ContextCraft
 
-First off, thank you for considering contributing to **ContextCraft**! Whether you are adding support for a new programming language grammar, refining the Personalized PageRank graph heuristics, or improving documentation, your contributions are deeply appreciated.
+Contributions can improve language support, dependency resolution, ranking, token allocation, the Python bindings, or documentation. Keep changes focused and explain the behavior they affect.
 
----
+## Development setup
 
-## 1. Quick Development Setup (Under 60 Seconds)
+Install these tools before working on the project:
 
-We use [Astral's `uv`](https://docs.astral.sh/uv/) for lightning-fast dependency management and virtual environments.
+- A current stable [Rust toolchain](https://rustup.rs/) with rustfmt and Clippy, plus a C/C++ toolchain for the Tree-sitter grammars.
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.10 or newer for the Python bindings and CLI.
+- [Just](https://just.systems/man/en/) to run the project recipes.
+- [dprint](https://dprint.dev/install/) for formatting and [Tombi](https://tombi-toml.github.io/tombi/docs/installation/) for TOML linting.
+- Node.js 24 and the pnpm version declared in `package.json` if you are working on the docs.
 
-```bash
-# 1. Fork and clone the repository
+Fork and clone the repository, then run these commands from its root:
+
+```sh
 git clone https://github.com/<your-username>/contextcraft.git
 cd contextcraft
-
-# 2. Create the virtual environment and install all dependencies (core + web + dev)
-uv sync --locked --all-extras --dev
-
-# 3. Install pre-commit hooks
-uv run pre-commit install
+uv sync --locked --all-packages --extra cli --dev
+cargo install plissken --locked
+uv run --locked prek install
 ```
 
----
+The Python installation builds the native extension through Maturin. Plissken generates the API documentation. Prek installs both pre-commit and pre-push hooks using `prek.toml`.
 
-## 2. Running the Quality & Verification Suite
+To see the available recipes:
 
-Before submitting a Pull Request, please ensure all three verification checks pass locally:
-
-```bash
-# 1. Lint & import sorting check
-uv run ruff check contextcraft tests web benchmarks
-
-# 2. Strict static type checking
-uv run mypy contextcraft
-
-# 3. Full test suite with branch coverage
-uv run pytest --cov=contextcraft --cov-report=term-missing
+```sh
+just --list
 ```
 
----
+## Repository layout
 
-## Test Layout
+| Path                                   | Purpose                                                                                          |
+| :------------------------------------- | :----------------------------------------------------------------------------------------------- |
+| `crates/contextcraft_core/src/`        | Repository indexing, language analysis, dependency ranking, tier rendering, and token allocation |
+| `crates/contextcraft_core/queries/`    | Tree-sitter capture queries                                                                      |
+| `crates/contextcraft_core/tests/`      | Core integration tests and shared fixtures                                                       |
+| `binding_python/src/`                  | PyO3 bindings                                                                                    |
+| `binding_python/python/contextcraft/`  | Python exports, type stubs, and CLI                                                              |
+| `binding_python/python/tests/`         | SDK and CLI tests using `unittest`                                                               |
+| `docs/src/content/docs/`               | Documentation pages                                                                              |
+| `docs/src/content/docs/reference/api/` | Generated API reference                                                                          |
+| `.github/workflows/`                   | CI, documentation deployment, and releases                                                       |
 
-- `tests/ast/`: AST models, parser behavior, and lexical scopes.
-- `tests/languages/`: shared language conformance tests and per-language extraction, skeleton, and signature tests.
-- `tests/pipeline/`: configuration, scanning, sanitization, ranking, optimization, elision, formatting, and token counting.
-- `tests/integration/`: compiler, CLI, web API, and benchmark workflows.
+## Formatting, linting, and tests
 
-Keep each test file focused on one component or behavior. Shared repository fixtures
-live in `tests/conftest.py`; language samples and tokenizer fixtures live in their
-subsystem's `conftest.py`. Pytest uses importlib mode so language folders can use
-consistent filenames such as `test_extraction.py` and `test_skeleton.py`.
+Run formatting through uv so the recipes can find Ruff in the workspace environment:
 
-```bash
-uv run pytest tests/languages/
-uv run pytest tests/pipeline/test_optimizer.py
-uv run pytest tests/integration/
+```sh
+uv run --locked just fmt
+uv run --locked just lint
+just check-rust
+just test-python
 ```
+
+`fmt` changes files. `lint` runs Clippy and Tombi. `check-rust` checks Rust formatting, runs Clippy with warnings treated as errors, and runs workspace tests. `test-python` runs the SDK and CLI tests.
+
+For Rust tests with all features enabled followed by the Python suite:
+
+```sh
+just test
+```
+
+Run Python type checking with the CLI dependencies available:
+
+```sh
+uv run --locked --package contextcraft-ai --extra cli --group dev pyrefly check binding_python/python/contextcraft
+```
+
+Pre-commit hooks run file checks, Ruff, Pyrefly, Rust formatting, and API generation when applicable. The pre-push hooks run Rust linting and tests for matching Rust or Cargo changes. To run the Rust pre-push checks manually:
+
+```sh
+uv run --locked prek run --hook-stage pre-push --all-files
+```
+
+Do not bypass a failed hook. Fix the cause and rerun it. If API generation changes files, review those changes and stage the generated output before retrying the commit.
+
+### Targeted tests
+
+Core integration tests cover indexing, language analysis, dependencies, ranking, redaction, tier rendering, formatting, and budget enforcement. Shared fixtures live in `crates/contextcraft_core/tests/common/`.
+
+```sh
+cargo test -p contextcraft-ai-core --test dependencies --locked
+cargo test -p contextcraft-ai-core --test languages --locked
+cargo test -p contextcraft-ai-core --test pipeline --locked
+```
+
+The Python suite checks configuration, snapshots, error mapping, token counts, CLI output, and entry points:
+
+```sh
+just test-python
+```
+
+## Python package builds
+
+Build the source distribution and a wheel from it:
+
+```sh
+just build-python
+```
+
+Artifacts are written to `dist/`. To select an interpreter, set `UV_PYTHON` before running the recipe. CI uses this variable to select each Python version in its OS and interpreter matrix.
+
+Changes to the native API should also update the Python exports and `.pyi` stubs in `binding_python/python/contextcraft/`.
 
 ## Documentation
 
-The documentation uses Sphinx, Furo, and MyST Markdown. After installing the development dependencies, preview it with live reload:
+The site uses Astro and Starlight. Install the frontend dependencies before starting it:
 
-```bash
-uv run --locked sphinx-autobuild -b dirhtml docs docs/_build/html
+```sh
+pnpm install --frozen-lockfile
+just dev-docs
 ```
 
-Open <http://127.0.0.1:8000>. To build with warnings treated as errors:
+Use the URL printed by Astro. The site uses the `/contextcraft/` base path for GitHub Pages.
 
-```bash
-uv run --locked sphinx-build -W --keep-going -b dirhtml docs docs/_build/html
+Build the site with:
+
+```sh
+just build-docs
 ```
 
----
+This builds the existing documentation into `docs/dist/`. It does not regenerate the API reference. After changing Rust or Python API documentation, run:
 
-## 3. High-Impact Ways to Contribute
+```sh
+just gen-docs
+```
 
-1. **Adding or Enhancing Language Support (`contextcraft/languages/`):**
-   - Follow the JavaScript package layout: `language.py`, `extraction.py`, `skeleton.py`, and `signatures.py`.
-   - Declare parser IDs, extensions, filenames, and ignore patterns in `LanguageSpec`, then register the language in `languages/builtin.py`.
-   - Implement extraction and the `SkeletonBuilder` / `SignaturesBuilder` classes. Register them as `skeleton_builder` and `signatures_builder` on the language class.
-   - Test symbol ranges, syntax-safe summaries, missing grammars, and token-budget compliance.
-2. **Improving Cross-File Import Resolution (`contextcraft/graph.py`):**
-   - Enhance `_resolve_imported_files` for Rust (`use crate::...`), Go, C/C++ `#include`, or Java package imports.
-3. **Expanding Secret Detection Rules (`contextcraft/sanitizer.py`):**
-   - Add zero-false-positive token regexes to `SecretSanitizer._TOKEN_PATTERNS`.
+Review and include the generated changes, but do not edit generated API pages or `_sidebar.mjs` by hand. Their source and output paths are configured in `plissken.toml`.
 
----
+CI builds the docs on pull requests. Successful CI runs on `main` upload the site and deploy it through `.github/workflows/deploy-docs.yml`. The repository's Pages source must be set to **GitHub Actions**.
 
-## 4. Pull Request Process
+## Language and pipeline changes
 
-1. Create a descriptive feature branch (`git checkout -b feat/rust-use-resolver`).
-2. Add unit tests in `tests/` covering your new functionality.
-3. Commit using [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat(ast): add Rust trait signature extraction`).
-4. Push to your fork and open a Pull Request against `main`.
+To add or extend a language:
 
----
+1. Implement or update its `Language` implementation in `crates/contextcraft_core/src/languages/` and its capture query in `crates/contextcraft_core/queries/`.
+2. For a new grammar, add its dependency to the Cargo workspace and core crate. Export the module in `languages.rs` and register the implementation in `index.rs`.
+3. Define filename detection, source extensions, exclusions, outline captures, and any supported local dependency or package resolution.
+4. Check declaration ranges, outline content, dependency edges, and token-budget behavior with representative source files.
+5. Update the [language support reference](docs/src/content/docs/reference/languages.md) and regenerate API documentation when needed.
+
+Dependency resolution is static and repository-local. Document unsupported constructs rather than implying compiler-level name binding or executing project build scripts.
+
+Ranking changes belong in `graph/scorer.rs`, allocation changes in `optimizer.rs`, and final serialization and budget correction in `formatter.rs`. Secret redaction is configured in `repo.rs` before source analysis. Preserve byte offsets and line breaks when changing redaction behavior.
+
+## Pull requests
+
+- Open PRs against `main` and describe the problem, changed behavior, and checks you ran.
+- Keep unrelated cleanup, build output, and temporary artifacts out of the diff.
+- Include regression coverage for behavior changes and update affected documentation.
+- Use [Conventional Commits](https://www.conventionalcommits.org/), such as `fix(rust): resolve local module aliases`, for commit messages and squash-merge titles.
+- Wait for the full CI matrix to pass before merging. Local checks cannot verify every supported platform.
+
+## AI-assisted contributions
+
+AI-assisted contributions are welcome. You are responsible for the code you submit, whether you wrote it yourself or used an assistant.
+
+Read every change before submitting it and make sure you understand what the code does. You should be able to explain why the change is needed, how it fits the pipeline, and how it handles relevant edge cases. Run the checks yourself and inspect the results rather than relying on an assistant's claim that they passed.
+
+Do not submit generated code you have not reviewed or cannot explain. Verify that referenced APIs, dependencies, and commands exist, and check generated examples against the actual implementation. The same review standard applies to code, documentation, and configuration.
 
 ## Releases
 
-[Release Please](https://github.com/googleapis/release-please) opens or updates a release PR after pushes to `main`. It determines the next version from Conventional Commits:
+[Release Please](https://github.com/googleapis/release-please) opens or updates a release PR after pushes to `main`. Conventional Commits determine the version:
 
 - `fix:` and `perf:` produce patch releases.
 - `feat:` produces minor releases.
 - `BREAKING CHANGE:` footers or `!` produce minor releases while the version is `0.x`, and major releases after `1.0`.
 
-The release PR updates `pyproject.toml`, `contextcraft/__init__.py`, `uv.lock`, `CHANGELOG.md`, and `.release-please-manifest.json`. Review it, wait for CI to pass, then merge it. The next workflow run creates a `v`-prefixed tag and a GitHub release. Use a conventional squash-merge title for normal PRs, and preserve the generated title and body when merging release PRs.
+Rust and Python share the version in `[workspace.package]` in `Cargo.toml`. Both Rust crates inherit it, and Maturin reads the binding crate's version for the Python distribution. Release Please uses the `simple` strategy with explicit TOML updates for `Cargo.toml` and the workspace package entries in `Cargo.lock`.
 
-The manifest starts at the existing `v0.1.0` release. The configuration's `bootstrap-sha` limits the first release's commit history to changes after that tag; Release Please ignores it after the first release PR is merged.
+Review the release PR's versions, changelog, and `.release-please-manifest.json`, then wait for CI before merging. Preserve the generated release PR title and body. The next Release Please run creates a `v`-prefixed tag and a GitHub release. The manifest tracks the last released version, and `bootstrap-sha` only applies before the first release PR is merged.
 
 ### PyPI publishing
 
-Merging a Release Please PR triggers a workflow run on `main`. When Release Please creates the tag and GitHub release, it dispatches **Publish to PyPI** as a separate workflow run on `main`, passing that tag. Keeping publishing in its own top-level workflow ensures the attestation identity matches the configured PyPI Trusted Publisher (`publish-pypi.yml`). The publishing workflow builds the tagged source and publishes through the existing `pypi` environment with attestations enabled. Any environment approval rules still apply. Release Please reports dispatch success; check the separate **Publish to PyPI** run for the publishing result.
+When Release Please creates a release, `.github/workflows/release-please.yml` dispatches **Publish to PyPI** on `main` with the release tag. The publishing workflow builds the tagged source, then publishes `contextcraft-ai` through the `pypi` environment using Trusted Publishing. The Python import remains `contextcraft`.
 
-To publish an existing release manually, run **Actions → Publish to PyPI → Run workflow** from `main` and enter its tag, such as `v0.2.0`. Creating tags or releases manually does not trigger publishing; use this manual workflow instead.
+Maturin builds Python 3.10+ ABI3 wheels for Linux x86_64 and ARM64, macOS Intel and Apple Silicon, and Windows x86_64 and ARM64. ARM64 wheels must pass an installation and tokenizer smoke test before publishing. A source distribution includes the Rust workspace. Rust crates are not published to crates.io.
+
+PyPI publishing runs in its own top-level workflow so its attestation identity matches the configured Trusted Publisher, `publish-pypi.yml`. Any required `pypi` environment approval must be granted before publication.
+
+To publish an existing release manually, run **Actions → Publish to PyPI → Run workflow** from `main` and enter a tag containing the Maturin packaging configuration. Creating a tag or release manually does not trigger publication.

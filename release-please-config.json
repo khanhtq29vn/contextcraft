@@ -3,15 +3,25 @@
   "bootstrap-sha": "6ce1da31c39979e2e9a7330b74e231de6949e72a",
   "packages": {
     ".": {
-      "release-type": "python",
+      "release-type": "simple",
       "include-component-in-tag": false,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": false,
       "extra-files": [
         {
           "type": "toml",
-          "path": "uv.lock",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
           "jsonpath": "$.package[?(@.name.value=='contextcraft-ai')].version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value=='contextcraft-ai-core')].version"
         }
       ]
     }

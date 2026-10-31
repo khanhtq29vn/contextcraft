@@ -1,0 +1,82 @@
+---
+title: Use the Python SDK
+description: Configure the Rust-backed pipeline and inspect repository analysis from Python.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The Python SDK uses the same Rust pipeline as the CLI. Install the SDK alone with:
+
+<Tabs syncKey="contextcraft-package-manager">
+<TabItem label="uv">
+
+In your [uv project](https://docs.astral.sh/uv/guides/projects/), run:
+
+```sh
+uv add contextcraft-ai
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```sh
+pip install contextcraft-ai
+```
+
+</TabItem>
+</Tabs>
+
+## Generate an artifact
+
+```python
+from pathlib import Path
+from contextcraft import Config, ContextCraft, OutputFormat
+
+config = Config(
+    budget_tokens=8_000,
+    focus_query="authentication",
+    output_format=OutputFormat.MARKDOWN,
+)
+pipeline = ContextCraft(config)
+analysis = pipeline.run(Path("."))
+
+Path("context.md").write_text(analysis.artifact.content, encoding="utf-8")
+print(analysis.artifact.tokens)
+```
+
+`run()` returns a `RepositoryAnalysis`. Its artifact contains the serialized content, final token count, selected tiers keyed by file ID, and a flag indicating whether token counts were estimated.
+
+## Change settings for the next run
+
+```python
+pipeline.config.budget_tokens = 16_000
+pipeline.config.focus_files = ["src/auth", "src/session"]
+next_analysis = pipeline.run(Path("."))
+```
+
+Each run rereads and analyzes the repository, even when you reuse the pipeline. List settings return copies, so assign a new list instead of appending to a returned value.
+
+The binding copies configuration before processing and releases the Python GIL while the Rust pipeline runs. Source analysis and tier rendering use Rayon for parallel execution by default. Set `pipeline.config.enable_parallel = False` before the next run to process those stages sequentially.
+
+## Inspect the analysis
+
+```python
+for file_id, file in analysis.index.files.items():
+    level = analysis.artifact.selected_tiers[file_id]
+    print(file.path, level.as_str(), analysis.scores[file_id])
+```
+
+Results expose the index, readable sources, dependency graph, relevance scores, rendered tiers, and artifact. File and package IDs belong to one analysis and cannot be combined across runs. Result attributes are read-only. Collections return copies that contain shared snapshot objects.
+
+## Handle failures
+
+Check the exception message to identify the failed input or stage:
+
+- **Repository cannot be opened (`OSError`).** Pass an existing local directory that you can read, rather than a file or remote URL. Check the path and read permissions. This includes `FileNotFoundError` and `NotADirectoryError`.
+- **Invalid settings or a budget that cannot fit (`ValueError`).** Keep `budget_tokens` and `max_file_size_bytes` greater than zero. If the message says the artifact cannot fit, increase `budget_tokens` or [exclude unneeded files](../../guides/files/): even minimal framing and paths require tokens. Malformed manifests can also raise `ValueError`. Inspect the file named in the message.
+- **Unexpected configuration argument (`TypeError`).** Check keyword names against the [configuration reference](../../reference/configuration/). Python uses `budget_tokens`, for example, rather than the CLI option name `budget`.
+- **Other pipeline failure (`RuntimeError`).** Keep the full exception message and use [troubleshooting](../../guides/troubleshooting/) to check the reported stage. Changing the token budget will not resolve every processing failure.
+
+For path, budget, and output-writing problems, start with the [troubleshooting guide](../../guides/troubleshooting/).
+
+See [configuration](../../reference/configuration/) for defaults and the [Python API reference](../../reference/api/contextcraft/) for all exported types. Rust integrations can use the [core API](../../reference/api/rust/contextcraft-ai-core/) directly.

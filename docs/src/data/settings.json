@@ -1,0 +1,57 @@
+[
+  {
+    "name": "enable_parallel",
+    "default": "True",
+    "meaning": "Use Rayon for source analysis and tier rendering."
+  },
+  {
+    "name": "budget_tokens",
+    "default": "16000",
+    "meaning": "Maximum tokens in the complete serialized artifact. Must be positive."
+  },
+  {
+    "name": "focus_query",
+    "default": "None",
+    "meaning": "Task description used for lexical relevance and personalized ranking."
+  },
+  {
+    "name": "focus_files",
+    "default": "[]",
+    "meaning": "Paths, filenames, directories, or globs to favor. Matching does not guarantee inclusion."
+  },
+  {
+    "name": "output_format",
+    "default": "OutputFormat.MARKDOWN",
+    "meaning": "Markdown, XML, or JSON serialization."
+  },
+  {
+    "name": "exclude_patterns",
+    "default": "[]",
+    "meaning": "Repository-relative ignore::overrides globs without a leading exclusion marker."
+  },
+  {
+    "name": "respect_gitignore",
+    "default": "True",
+    "meaning": "Honor Git exclusion rules. Language-specific exclusions still apply when disabled."
+  },
+  {
+    "name": "redact_secrets",
+    "default": "True",
+    "meaning": "Redact recognized secret types before parsing, preserving byte offsets and line breaks. Detection does not cover every possible secret."
+  },
+  {
+    "name": "max_file_size_bytes",
+    "default": "1048576",
+    "meaning": "Source and manifest read limit in bytes. Must be positive."
+  },
+  {
+    "name": "tokenizer_encoding",
+    "default": "TokenizerEncoding.CL100K_BASE",
+    "meaning": "Vocabulary used for token accounting."
+  },
+  {
+    "name": "allow_token_estimates",
+    "default": "True",
+    "meaning": "Permit estimated pipeline counts. The current tokenizer counts exactly without a fallback."
+  }
+]

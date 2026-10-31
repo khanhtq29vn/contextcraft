@@ -1,0 +1,580 @@
+---
+import heroArt from "../../assets/plates/hero-art.png";
+import ContextDemo from "../components/ContextDemo.astro";
+import FidelityExample from "../components/FidelityExample.astro";
+import FileIcon from "../components/FileIcon.astro";
+import HomeThemeSelect from "../components/HomeThemeSelect.astro";
+import RepositoryFlow from "../components/RepositoryFlow.astro";
+import ThemeProvider from "../components/ThemeProvider.astro";
+import "../styles/home.css";
+
+const fidelity = [
+  {
+    title: "Full source",
+    copy: "Complete files for critical code.",
+    code: `class UserService:
+    """Cache-first user access."""
+
+    def get(self, uid: str) -> User:
+        key = self._key(uid)
+        return cache.get(key) or db.load(uid)
+
+    def _key(self, uid: str) -> str:
+        return f"user:{uid}"`,
+    note: "Use full source when the logic is central to your task.",
+  },
+  {
+    title: "Skeleton",
+    copy: "Structure without implementation.",
+    code: `class UserService:
+    """Cache-first user access."""
+
+    def get(self, uid: str) -> User:
+        ...
+
+    def _key(self, uid: str) -> str:
+        ...`,
+    note: "Keep structure to preserve relationships across the codebase.",
+  },
+  {
+    title: "Signatures",
+    copy: "Interfaces and types.",
+    code: `class UserService:
+    def get(self, uid: str) -> User: ...`,
+    note: "Include signatures when the contract is enough.",
+  },
+  {
+    title: "Paths",
+    copy: "Relevant files and locations.",
+    code: `src/
+├── services/
+│   └── user_service.py
+├── models/
+│   └── user.py
+└── storage/
+    └── database.py`,
+    note: "Keep important paths so the model can find relevant context.",
+  },
+];
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Turn your repository into useful LLM context that fits your token budget. Syntax-aware compression, task-relevant ranking, and a Rust-backed pipeline."
+    />
+    <meta name="theme-color" content="#faf9f6" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href={`${import.meta.env.BASE_URL}favicon.svg`}
+    />
+    <ThemeProvider />
+    <noscript>
+      <style>
+      .copy-button, .budget-control {
+        display: none !important;
+      }
+      .install-line {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      </style>
+    </noscript>
+    <title>ContextCraft — Your repository. The right context.</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="home-header wrap">
+      <a
+        class="wordmark"
+        href={import.meta.env.BASE_URL}
+        aria-label="ContextCraft home"
+      >ContextCraft</a>
+      <nav aria-label="Main navigation">
+        <a
+          href={`${import.meta.env.BASE_URL}docs/`}
+          aria-label="Documentation"
+        ><span class="nav-full">Documentation</span><span class="nav-short"
+          >Docs</span></a>
+        <a href="https://github.com/khanhtq29vn/contextcraft">GitHub</a>
+        <HomeThemeSelect />
+      </nav>
+    </header>
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <h1 id="hero-title">Your repository.<br />The right context.</h1>
+          <p class="hero-subtitle">
+            Give your language model the code that matters.
+          </p>
+          <p class="hero-description">
+            ContextCraft prepares task-relevant repository context for language
+            models within a token budget. Syntax-aware compression keeps detail
+            where it matters.
+          </p>
+          <div class="install-line" id="try-command">
+            <code>uvx --from "contextcraft-ai[cli]" <span class="command-tail"
+              >contextcraft .</span></code>
+            <button
+              type="button"
+              class="copy-button"
+              disabled
+              title="Copy command"
+              data-copy='uvx --from "contextcraft-ai[cli]" contextcraft .'
+            >
+              <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 8h12v12H8zM4 16V4h12" />
+              </svg>
+              <svg class="copied-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m5 12 4 4L19 6" />
+              </svg><span>Copy command</span>
+            </button>
+            <span class="copy-status" role="status"></span>
+          </div>
+          <p class="hero-run-help">
+            Run in your repository. Requires <a
+              href="https://docs.astral.sh/uv/getting-started/installation/"
+            >uv</a>; prints Markdown to your terminal.{" "}
+            <a href={`${import.meta.env.BASE_URL}getting-started/installation/`}
+            >Other installation options</a>.
+          </p>
+        </div>
+        <figure class="hero-figure">
+          <img
+            src={heroArt.src}
+            width={heroArt.width}
+            height={heroArt.height}
+            alt="An engraved tree becomes source-code pages, then a smaller context document."
+            fetchpriority="high"
+          />
+          <figcaption>
+            From your<br />repository<br />to focused<br />context.
+          </figcaption>
+        </figure>
+      </section>
+
+      <RepositoryFlow />
+
+      <section class="detail-overview wrap" aria-labelledby="detail-title">
+        <div class="detail-intro">
+          <h2 id="detail-title">Keep the detail<br />that matters.</h2>
+          <p>
+            ContextCraft includes the right content for your task, with multiple
+            levels of detail. You get useful context, not noise.
+          </p>
+        </div>
+        <div class="detail-examples">
+          {fidelity.map(level => <FidelityExample {...level} />)}
+        </div>
+      </section>
+      <section class="comparison-section" id="keep-what-matters">
+        <div class="wrap">
+          <div class="section-intro">
+            <h2>Keep the auth code.<br />Not just the first files.</h2>
+            <p>
+              A repository is more than a list of files. ContextCraft uses
+              structure and relevance to decide where detail earns its place.
+            </p>
+          </div>
+          <ContextDemo />
+          <details class="comparison-detail">
+            <summary>Compare with filling in file order</summary>
+            <div class="comparison-context">
+              An illustrative task: investigate an authentication bug.
+            </div>
+            <div class="comparison-grid">
+              <div class="comparison-column naive">
+                <h3>Fill in file order</h3>
+                <p>The budget runs out before the relevant code.</p>
+                <div class="compare-file">
+                  <code>a_config.py</code><strong
+                  >FULL</strong><div class="segments">
+                    <i></i><i></i><i></i><i></i>
+                  </div>
+                </div>
+                <div class="compare-file">
+                  <code>b_helpers.py</code><strong
+                  >FULL</strong><div class="segments">
+                    <i></i><i></i><i></i><i></i>
+                  </div>
+                </div>
+                <div class="compare-file cut">
+                  <code>m_auth.py</code><strong
+                  >CUT</strong><div class="segments empty">
+                    <i></i><i></i><i></i><i></i>
+                  </div>
+                </div>
+                <div class="compare-file cut">
+                  <code>z_routes.py</code><strong
+                  >CUT</strong><div class="segments empty">
+                    <i></i><i></i><i></i><i></i>
+                  </div>
+                </div>
+                <div class="compare-output missing">
+                  <code>m_auth.py · omitted</code><span>The code you came for is
+                    missing.</span>
+                </div>
+              </div>
+              <div class="comparison-column relevant">
+                <h3>Allocate by relevance</h3>
+                <p>Vary the detail. Keep the useful connections.</p>
+                <div class="compare-file">
+                  <code>a_config.py</code><strong
+                  >SIGS</strong><div class="segments">
+                    <i></i><i></i><i class="muted"></i><i class="muted"></i>
+                  </div>
+                </div>
+                <div class="compare-file">
+                  <code>b_helpers.py</code><strong
+                  >TREE</strong><div class="segments">
+                    <i></i><i class="muted"></i><i class="muted"></i><i
+                      class="muted"
+                    ></i>
+                  </div>
+                </div>
+                <div class="compare-file">
+                  <code>m_auth.py</code><strong
+                  >FULL</strong><div class="segments">
+                    <i></i><i></i><i></i><i></i>
+                  </div>
+                </div>
+                <div class="compare-file">
+                  <code>z_routes.py</code><strong
+                  >SKEL</strong><div class="segments">
+                    <i></i><i></i><i></i><i class="muted"></i>
+                  </div>
+                </div>
+                <div class="compare-output kept">
+                  <code>def auth(t):<br />&nbsp; return ok(t)</code><span
+                  >Relevant implementation, kept in context.</span>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="pipeline-section" id="how-it-works">
+        <div class="wrap">
+          <div class="section-intro">
+            <h2>Structure in.<br />Signal out.</h2>
+            <p>
+              From source files to a budgeted artifact, every stage keeps the
+              shape of your codebase in view.
+            </p>
+          </div>
+          <ol class="pipeline">
+            <li>
+              <span class="step-number">1</span><h3>Scan</h3>
+              <p>
+                Index local files and packages. Read eligible source and redact
+                recognized secrets.
+              </p>
+              <div
+                class="pipeline-illustration scan-figure"
+                role="img"
+                aria-label="Source files are included, images excluded, and a recognized secret is redacted."
+              >
+                <div class="scan-file included">
+                  <FileIcon /><code>main.py</code><span class="file-state"
+                  >keep</span>
+                </div>
+                <div class="scan-file excluded">
+                  <FileIcon /><code>image.png</code><span class="file-state"
+                  >skip</span>
+                </div>
+                <div class="scan-file redacted">
+                  <FileIcon /><code>secret = ***</code><span
+                    class="redaction-mark"
+                  ></span>
+                </div>
+              </div>
+            </li>
+            <li>
+              <span class="step-number">2</span><h3>Parse</h3>
+              <p>
+                Read syntax with Tree-sitter. Capture declarations and
+                structural outlines.
+              </p>
+              <div
+                class="pipeline-illustration parse-figure"
+                role="img"
+                aria-label="A parsed function branches into arguments and body."
+              >
+                <div class="syntax-node syntax-root"><code>function</code></div>
+                <div class="syntax-branches"><span></span><span></span></div>
+                <div class="syntax-children">
+                  <div class="syntax-node"><code>args</code></div>
+                  <div class="syntax-node"><code>body</code></div>
+                </div>
+              </div>
+            </li>
+            <li>
+              <span class="step-number">3</span><h3>Rank</h3>
+              <p>
+                Resolve local dependencies. Score relevance with personalized
+                PageRank and lexical signals.
+              </p>
+              <div
+                class="pipeline-illustration dependency-figure"
+                role="img"
+                aria-label="api.py and routes.py depend on auth.py, which receives emphasis."
+              >
+                <div class="dependency-inputs">
+                  <code>api.py</code><code>routes.py</code>
+                </div>
+                <div class="dependency-lines"><span></span><span></span></div>
+                <code class="dependency-focus">auth.py</code>
+              </div>
+            </li>
+            <li>
+              <span class="step-number">4</span><h3>Vary detail</h3>
+              <p>
+                Render full source, skeletons, signatures, and path-only
+                representations.
+              </p>
+              <div
+                class="pipeline-illustration tiers-figure"
+                role="img"
+                aria-label="Full source, skeleton, signatures and paths retain progressively less source detail."
+              >
+                <div class="tier-sample">
+                  <div class="tier-page tier-full">
+                    <i></i><i></i><i></i><i></i><i></i><i></i>
+                  </div><span>FULL</span>
+                </div>
+                <div class="tier-sample">
+                  <div class="tier-page tier-skeleton">
+                    <i></i><i></i><i></i><i></i>
+                  </div><span>SKEL</span>
+                </div>
+                <div class="tier-sample">
+                  <div class="tier-page tier-signature">
+                    <i></i><i></i>
+                  </div><span>SIGS</span>
+                </div>
+                <div class="tier-sample">
+                  <div class="tier-page tier-path"><i></i></div><span
+                  >TREE</span>
+                </div>
+              </div>
+            </li>
+            <li>
+              <span class="step-number">5</span><h3>Allocate</h3>
+              <p>
+                Choose detail by utility per token. Format and recount the
+                complete artifact.
+              </p>
+              <div
+                class="pipeline-illustration allocation-figure"
+                role="img"
+                aria-label="Selected source sections fit inside a token limit."
+              >
+                <div class="allocation-limit">
+                  <span>Token limit</span><svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 3v16m-4-4 4 4 4-4" />
+                  </svg>
+                </div>
+                <div class="allocation-pieces">
+                  <i></i><i></i><i></i><i></i><i></i><i></i>
+                </div>
+                <div class="allocation-baseline">
+                  <span>Selected context</span><span>Fits</span>
+                </div>
+              </div>
+            </li>
+          </ol>
+          <div class="pipeline-footer">
+            <a href={`${import.meta.env.BASE_URL}reference/architecture/`}>Read
+              the architecture <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M4 12h15m-6-6 6 6-6 6" />
+              </svg></a>
+          </div>
+        </div>
+      </section>
+
+      <section class="benchmark-section" id="benchmark">
+        <div class="wrap benchmark-layout">
+          <div>
+            <h2>A smaller context.<br />A measured example.</h2>
+            <p>
+              In the earlier v0.3.0 repository benchmark, 258 files became a
+              budgeted context artifact. These measurements have not been
+              verified for the current pipeline.
+            </p>
+          </div>
+          <figure class="benchmark-chart">
+            <figcaption>Tokens emitted · linear scale</figcaption>
+            <div class="chart-row raw">
+              <span>Raw</span><div><i style="--bar: 100%"></i></div><strong
+              >119,813</strong>
+            </div>
+            <div class="chart-row">
+              <span>16k</span><div><i style="--bar: 13.34%"></i></div><strong
+              >15,980</strong>
+            </div>
+            <div class="chart-row">
+              <span>12k</span><div><i style="--bar: 10.01%"></i></div><strong
+              >11,991</strong>
+            </div>
+            <div class="chart-row">
+              <span>8k</span><div><i style="--bar: 6.67%"></i></div><strong
+              >7,991</strong>
+            </div>
+            <div class="chart-row">
+              <span>4k</span><div><i style="--bar: 3.31%"></i></div><strong
+              >3,971</strong>
+            </div>
+            <p>v0.3.0 · 258 files · 119,813 raw tokens</p>
+          </figure>
+        </div>
+      </section>
+
+      <section class="start-section wrap" id="start">
+        <div>
+          <h2>Bring your next<br />code question.</h2>
+          <p>Start with a local repository, a task, and a token budget.</p><a
+            class="primary-link"
+            href={`${import.meta.env.BASE_URL}getting-started/quickstart/`}
+          >Generate your first context file <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M4 12h15m-6-6 6 6-6 6" />
+            </svg></a>
+        </div>
+        <div class="start-code">
+          <div>
+            <span>From your repository</span><button
+              type="button"
+              data-copy='contextcraft . --budget 8k --focus "authentication" -o context.md'
+              class="copy-button"
+              disabled
+            >
+              <span>Copy command</span>
+            </button>
+          </div>
+          <pre><code>contextcraft . \
+  --budget 8k \
+  --focus "authentication" \
+  -o context.md</code></pre>
+          <p class="copy-status" role="status"></p><a
+            href={`${import.meta.env.BASE_URL}docs/`}
+          >Read the documentation <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12h15m-6-6 6 6-6 6" />
+            </svg></a>
+        </div>
+      </section>
+    </main>
+    <footer class="home-footer wrap">
+      <a class="wordmark" href={import.meta.env.BASE_URL}>ContextCraft</a><span
+      >Useful code. Within budget.</span><nav aria-label="Footer">
+        <a href={`${import.meta.env.BASE_URL}docs/`}>Docs</a><a
+          href="https://github.com/khanhtq29vn/contextcraft"
+        >GitHub</a><a href="https://pypi.org/project/contextcraft-ai/">PyPI</a>
+      </nav>
+      <details class="footer-roadmap" id="future">
+        <summary>Planned tools</summary>
+        <p>
+          ContextCraft is the focus today. Three related tools are planned for
+          future development.
+        </p>
+        <dl>
+          <div>
+            <dt>AgentScaffold.io</dt>
+            <dd>Turn a tech stack into agent rule files.</dd>
+          </div>
+          <div>
+            <dt>StructItDown</dt>
+            <dd>Turn documents into validated data.</dd>
+          </div>
+          <div>
+            <dt>Paper2Repo</dt>
+            <dd>Turn research LaTeX into typed code skeletons.</dd>
+          </div>
+        </dl>
+      </details>
+    </footer>
+    <script>
+    document.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach(
+      (button) => {
+        let resetTimer: ReturnType<typeof setTimeout> | undefined;
+        button.addEventListener("click", async () => {
+          if (button.disabled || button.getAttribute("aria-busy") === "true") {
+            return;
+          }
+          button.setAttribute("aria-disabled", "true");
+          button.setAttribute("aria-busy", "true");
+          clearTimeout(resetTimer);
+          const text = button.dataset.copy ?? "";
+          const label = button.querySelector("span");
+          const status = button.parentElement?.querySelector(".copy-status")
+            ?? button.parentElement?.parentElement?.querySelector(
+              ".copy-status",
+            );
+          delete button.dataset.copied;
+          button.title = "Copying command";
+          if (label) label.textContent = "Copying";
+          if (status) {
+            status.removeAttribute("data-error");
+            status.textContent = "";
+          }
+          try {
+            if (
+              !text.trim() || !navigator.clipboard?.writeText
+            ) throw new Error("Copy unavailable");
+            await navigator.clipboard.writeText(text);
+            clearTimeout(resetTimer);
+            button.dataset.copied = "true";
+            button.title = "Copied";
+            if (label) label.textContent = "Copied";
+            if (status) {
+              status.removeAttribute("data-error");
+              status.textContent = "Command copied.";
+            }
+            resetTimer = setTimeout(() => {
+              delete button.dataset.copied;
+              button.title = "Copy command";
+              if (label) label.textContent = "Copy command";
+              if (status) status.textContent = "";
+            }, 2200);
+          } catch {
+            clearTimeout(resetTimer);
+            delete button.dataset.copied;
+            button.title = "Copy command";
+            if (status) {
+              status.setAttribute("data-error", "");
+              status.textContent =
+                "Copy unavailable. Select the command to copy it.";
+            }
+            if (label) label.textContent = "Select command";
+            const code = button.parentElement?.querySelector("code")
+              ?? button.parentElement?.parentElement?.querySelector("code");
+            if (code) {
+              const range = document.createRange();
+              range.selectNodeContents(code);
+              const selection = window.getSelection();
+              selection?.removeAllRanges();
+              selection?.addRange(range);
+            }
+          } finally {
+            button.removeAttribute("aria-disabled");
+            button.removeAttribute("aria-busy");
+          }
+        });
+        button.disabled = false;
+      },
+    );
+    </script>
+  </body>
+</html>
