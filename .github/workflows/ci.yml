@@ -27,6 +27,9 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
       - name: Install Just
         uses: taiki-e/install-action@v2
         with:
@@ -41,6 +44,7 @@ jobs:
     timeout-minutes: 15
     env:
       UV_PYTHON: ${{ matrix.python-version }}
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
     strategy:
       fail-fast: false
       matrix:
@@ -52,6 +56,11 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: python-${{ matrix.python-version }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
