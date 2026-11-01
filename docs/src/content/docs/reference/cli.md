@@ -1,6 +1,6 @@
 ---
 title: CLI options
-description: Look up input, focus, output, token accounting, and diagnostic options.
+description: Look up input, focus, output, browser preview, token accounting, and diagnostic options.
 ---
 
 ```sh
@@ -40,6 +40,25 @@ Focus is a hint rather than an inclusion guarantee. See [focus on a task](../../
 
 See [token budgets](../../guides/token-budgets/) for encoding labels. Create the parent output directory before writing a file. Existing output files can be overwritten.
 
+## Browser preview
+
+| Option                       | Default  | Purpose                                                                |
+| ---------------------------- | -------- | ---------------------------------------------------------------------- |
+| `--preview` / `--no-preview` | Disabled | Serve a read-only browser preview instead of printing the artifact.    |
+| `--port INTEGER`             | `0`      | Preview port, from `0` through `65535`. `0` chooses an available port. |
+| `--open` / `--no-open`       | Enabled  | Open the preview URL in the default browser.                           |
+
+```sh
+contextcraft . --preview
+contextcraft . --preview --port 8765 --no-open
+```
+
+The preview binds to `127.0.0.1` and prints its session URL to stderr, even with `--quiet`. Use `--no-open` to open that URL yourself. Press `Ctrl+C` to stop the server.
+
+You can copy or download the artifact, search files, and inspect their fidelity tiers. The view is a snapshot: rerun the command to refresh it. The session URL grants access to the results; do not share it.
+
+Existing analysis options such as `--budget`, `--focus`, and `--format` also apply to previews. Preview mode does not print the artifact to stdout, but an explicit `--output` file is still saved.
+
 ## Diagnostics
 
 | Option      | Purpose                                             |
@@ -49,4 +68,4 @@ See [token budgets](../../guides/token-budgets/) for encoding labels. Create the
 | `--help`    | Show command help.                                  |
 | `--version` | Show the installed version.                         |
 
-The artifact goes to stdout or the output file. Summaries and diagnostics go to stderr. Exit status is `0` for success, `1` for operational failure, and `2` for invalid arguments.
+By default, the artifact goes to stdout or the output file. Summaries and diagnostics go to stderr. Exit status is `0` for success, `1` for operational failure, and `2` for invalid arguments.
