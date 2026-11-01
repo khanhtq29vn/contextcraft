@@ -146,6 +146,9 @@ impl RepositoryReader {
                 })
                 .transpose()?;
 
+            // Do not retain read-buffer growth slack for the lifetime of the snapshot.
+            bytes.shrink_to_fit();
+
             Ok(Some((file_id, Source { bytes, analysis })))
         };
 

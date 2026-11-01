@@ -1,7 +1,7 @@
 //! Render escaped Markdown, XML, or JSON and enforce the final token budget.
 
 use std::collections::HashSet;
-use std::fmt::{self, Write};
+use std::io::{self, Write};
 
 use la_arena::ArenaMap;
 
@@ -62,10 +62,10 @@ impl ArtifactFormatter {
             return String::new();
         }
 
-        let mut output = String::with_capacity(content.len() + path.len() + 64);
+        let mut output = Vec::with_capacity(content.len() + path.len() + 64);
         render_file_into(&mut output, path, content, level, format)
-            .expect("writing to a String cannot fail");
-        output
+            .expect("writing to a Vec cannot fail");
+        String::from_utf8(output).expect("file framing preserves UTF-8")
     }
 
     pub(crate) fn file_bytes(
@@ -110,6 +110,8 @@ impl ArtifactFormatter {
 
     /// Serializes a selection and path listing without enforcing a token budget.
     ///
+    /// Writes escaped paths and file blocks directly into one output buffer.
+    ///
     /// # Errors
     ///
     /// Returns an error for inconsistent pipeline inputs, duplicate paths, or
@@ -134,89 +136,17 @@ impl ArtifactFormatter {
             ));
         }
 
-        let path = |file| {
-            tiers.files[file].levels[FidelityLevel::Tree as usize]
-                .as_ref()
-                .unwrap()
-                .content
-                .as_ref()
-        };
-        let mut blocks = String::new();
-
-        for (file, _) in index.files.iter() {
-            let level = selection.tiers[file];
-
-            if level == FidelityLevel::Tree {
-                continue;
-            }
-
-            if config.output_format == OutputFormat::Json && !blocks.is_empty() {
-                blocks.push(',');
-            }
-
-            let content = &tiers.files[file].levels[level as usize]
-                .as_ref()
-                .unwrap()
-                .content;
-            render_file_into(
-                &mut blocks,
-                path(file),
-                content,
-                level,
-                config.output_format,
-            )
-            .expect("writing to a String cannot fail");
-        }
-
-        let omitted = index.files.len() - tree.len();
-
-        Ok(match config.output_format {
-            OutputFormat::Json => {
-                let paths: Vec<_> = tree.iter().map(|&file| path(file)).collect();
-                let paths = serde_json::to_string(&paths).expect("paths serialize as JSON");
-                format!("{{\"tree\":{paths},\"omitted_paths\":{omitted},\"files\":[{blocks}]}}")
-            }
-            OutputFormat::Xml => {
-                let mut listing = format!("<tree omitted_paths=\"{omitted}\"");
-
-                if tree.is_empty() {
-                    listing.push_str(" />");
-                } else {
-                    listing.push('>');
-
-                    for &file in tree {
-                        listing.push_str("<file path=\"");
-                        write_xml(&mut listing, path(file), true)
-                            .expect("writing to a String cannot fail");
-                        listing.push_str("\" />");
-                    }
-
-                    listing.push_str("</tree>");
-                }
-
-                format!("<repository_context>{listing}<files>{blocks}</files></repository_context>")
-            }
-            OutputFormat::Markdown => {
-                let mut output = String::from("# Repository context\n\n");
-
-                for &file in tree {
-                    output.push_str("- ");
-                    output.push_str(&json_string(path(file)));
-                    output.push('\n');
-                }
-
-                if omitted != 0 {
-                    output.push_str(&format!("- {omitted} paths omitted\n"));
-                }
-
-                if !tree.is_empty() || omitted != 0 {
-                    output.push('\n');
-                }
-
-                output.push_str(&blocks);
-                output
-            }
-        })
+        let mut output = Vec::new();
+        render_into(
+            &mut output,
+            index,
+            tiers,
+            selection,
+            tree,
+            config.output_format,
+        )
+        .expect("writing to a Vec cannot fail");
+        Ok(String::from_utf8(output).expect("repository framing preserves UTF-8"))
     }
 
     /// Selects an index-ordered path listing using up to a tenth of the budget.
@@ -319,6 +249,9 @@ impl ArtifactFormatter {
                 });
             }
 
+            // Release oversized output before counting replacement tiers.
+            drop(content);
+
             let mut best: Option<(f64, f64, FileId, FidelityLevel)> = None;
 
             for (file, &current) in selected.tiers.iter() {
@@ -376,12 +309,115 @@ impl ArtifactFormatter {
     }
 }
 
+fn render_into(
+    output: &mut impl Write,
+    index: &Index,
+    tiers: &Tiers,
+    selection: &Selection,
+    tree: &[FileId],
+    format: OutputFormat,
+) -> io::Result<()> {
+    let path = |file| {
+        tiers.files[file].levels[FidelityLevel::Tree as usize]
+            .as_ref()
+            .unwrap()
+            .content
+            .as_ref()
+    };
+    let omitted = index.files.len() - tree.len();
+
+    match format {
+        OutputFormat::Json => {
+            output.write_all(b"{\"tree\":[")?;
+
+            for (position, &file) in tree.iter().enumerate() {
+                if position != 0 {
+                    output.write_all(b",")?;
+                }
+                write_json(output, path(file))?;
+            }
+
+            write!(output, "],\"omitted_paths\":{omitted},\"files\":[")?;
+        }
+        OutputFormat::Xml => {
+            write!(
+                output,
+                "<repository_context><tree omitted_paths=\"{omitted}\""
+            )?;
+
+            if tree.is_empty() {
+                output.write_all(b" />")?;
+            } else {
+                output.write_all(b">")?;
+
+                for &file in tree {
+                    output.write_all(b"<file path=\"")?;
+                    write_xml(output, path(file), true)?;
+                    output.write_all(b"\" />")?;
+                }
+
+                output.write_all(b"</tree>")?;
+            }
+
+            output.write_all(b"<files>")?;
+        }
+        OutputFormat::Markdown => {
+            output.write_all(b"# Repository context\n\n")?;
+
+            for &file in tree {
+                output.write_all(b"- ")?;
+                write_json(output, path(file))?;
+                output.write_all(b"\n")?;
+            }
+
+            if omitted != 0 {
+                writeln!(output, "- {omitted} paths omitted")?;
+            }
+
+            if !tree.is_empty() || omitted != 0 {
+                output.write_all(b"\n")?;
+            }
+        }
+    }
+
+    let mut first = true;
+
+    for (file, _) in index.files.iter() {
+        let level = selection.tiers[file];
+
+        if level == FidelityLevel::Tree {
+            continue;
+        }
+
+        if format == OutputFormat::Json && !first {
+            output.write_all(b",")?;
+        }
+        first = false;
+
+        let content = &tiers.files[file].levels[level as usize]
+            .as_ref()
+            .unwrap()
+            .content;
+        render_file_into(output, path(file), content, level, format)?;
+    }
+
+    match format {
+        OutputFormat::Json => output.write_all(b"]}"),
+        OutputFormat::Xml => output.write_all(b"</files></repository_context>"),
+        OutputFormat::Markdown => Ok(()),
+    }
+}
+
 // Share framing with rendering without collecting the complete file block.
 struct ByteCounter(usize);
 
 impl Write for ByteCounter {
-    fn write_str(&mut self, text: &str) -> fmt::Result {
-        self.0 += text.len();
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0 += bytes.len();
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
 }
@@ -392,30 +428,30 @@ fn render_file_into(
     content: &str,
     level: FidelityLevel,
     format: OutputFormat,
-) -> fmt::Result {
+) -> io::Result<()> {
     if level == FidelityLevel::Tree {
         return Ok(());
     }
 
     match format {
-        OutputFormat::Json => write!(
-            output,
-            "{{\"path\":{},\"tier\":\"{}\",\"content\":{}}}",
-            json_string(path),
-            level.as_str(),
-            json_string(content),
-        ),
+        OutputFormat::Json => {
+            output.write_all(b"{\"path\":")?;
+            write_json(output, path)?;
+            write!(output, ",\"tier\":\"{}\",\"content\":", level.as_str())?;
+            write_json(output, content)?;
+            output.write_all(b"}")
+        }
         OutputFormat::Xml => {
-            output.write_str("<file path=\"")?;
+            output.write_all(b"<file path=\"")?;
             write_xml(output, path, true)?;
             write!(output, "\" tier=\"{}\"", level.as_str())?;
 
             if content.is_empty() {
-                output.write_str(" />")
+                output.write_all(b" />")
             } else {
-                output.write_char('>')?;
+                output.write_all(b">")?;
                 write_xml(output, content, false)?;
-                output.write_str("</file>")
+                output.write_all(b"</file>")
             }
         }
         OutputFormat::Markdown => {
@@ -432,21 +468,22 @@ fn render_file_into(
             }
 
             let fence = "`".repeat(3.max(longest + 1));
+            output.write_all(b"## ")?;
+            write_json(output, path)?;
             write!(
                 output,
-                "## {} [{}]\n\n{fence}\n{content}\n{fence}\n\n",
-                json_string(path),
+                " [{}]\n\n{fence}\n{content}\n{fence}\n\n",
                 level.as_str()
             )
         }
     }
 }
 
-fn json_string(text: &str) -> String {
-    serde_json::to_string(text).expect("strings serialize as JSON")
+fn write_json(output: &mut impl Write, text: &str) -> io::Result<()> {
+    serde_json::to_writer(output, text).map_err(io::Error::other)
 }
 
-fn write_xml(output: &mut impl Write, text: &str, attribute: bool) -> fmt::Result {
+fn write_xml(output: &mut impl Write, text: &str, attribute: bool) -> io::Result<()> {
     let mut start = 0;
 
     for (offset, character) in text.char_indices() {
@@ -468,10 +505,10 @@ fn write_xml(output: &mut impl Write, text: &str, attribute: bool) -> fmt::Resul
             _ => continue,
         };
 
-        output.write_str(&text[start..offset])?;
-        output.write_str(replacement)?;
+        output.write_all(&text.as_bytes()[start..offset])?;
+        output.write_all(replacement.as_bytes())?;
         start = offset + character.len_utf8();
     }
 
-    output.write_str(&text[start..])
+    output.write_all(&text.as_bytes()[start..])
 }

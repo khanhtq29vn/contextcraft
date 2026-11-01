@@ -89,10 +89,10 @@ assert_eq!(file["content"], "fn main() { println!(\"hello\"); }\n");
             return String::new();
         }
 
-        let mut output = String::with_capacity(content.len() + path.len() + 64);
+        let mut output = Vec::with_capacity(content.len() + path.len() + 64);
         render_file_into(&mut output, path, content, level, format)
-            .expect("writing to a String cannot fail");
-        output
+            .expect("writing to a Vec cannot fail");
+        String::from_utf8(output).expect("file framing preserves UTF-8")
     }
 ```
 
@@ -164,6 +164,8 @@ fn render(
 
 Serializes a selection and path listing without enforcing a token budget.
 
+Writes escaped paths and file blocks directly into one output buffer.
+
 **Errors:**
 
 Returns an error for inconsistent pipeline inputs, duplicate paths, or
@@ -193,89 +195,17 @@ paths that do not belong to the index.
             ));
         }
 
-        let path = |file| {
-            tiers.files[file].levels[FidelityLevel::Tree as usize]
-                .as_ref()
-                .unwrap()
-                .content
-                .as_ref()
-        };
-        let mut blocks = String::new();
-
-        for (file, _) in index.files.iter() {
-            let level = selection.tiers[file];
-
-            if level == FidelityLevel::Tree {
-                continue;
-            }
-
-            if config.output_format == OutputFormat::Json && !blocks.is_empty() {
-                blocks.push(',');
-            }
-
-            let content = &tiers.files[file].levels[level as usize]
-                .as_ref()
-                .unwrap()
-                .content;
-            render_file_into(
-                &mut blocks,
-                path(file),
-                content,
-                level,
-                config.output_format,
-            )
-            .expect("writing to a String cannot fail");
-        }
-
-        let omitted = index.files.len() - tree.len();
-
-        Ok(match config.output_format {
-            OutputFormat::Json => {
-                let paths: Vec<_> = tree.iter().map(|&file| path(file)).collect();
-                let paths = serde_json::to_string(&paths).expect("paths serialize as JSON");
-                format!("{{\"tree\":{paths},\"omitted_paths\":{omitted},\"files\":[{blocks}]}}")
-            }
-            OutputFormat::Xml => {
-                let mut listing = format!("<tree omitted_paths=\"{omitted}\"");
-
-                if tree.is_empty() {
-                    listing.push_str(" />");
-                } else {
-                    listing.push('>');
-
-                    for &file in tree {
-                        listing.push_str("<file path=\"");
-                        write_xml(&mut listing, path(file), true)
-                            .expect("writing to a String cannot fail");
-                        listing.push_str("\" />");
-                    }
-
-                    listing.push_str("</tree>");
-                }
-
-                format!("<repository_context>{listing}<files>{blocks}</files></repository_context>")
-            }
-            OutputFormat::Markdown => {
-                let mut output = String::from("# Repository context\n\n");
-
-                for &file in tree {
-                    output.push_str("- ");
-                    output.push_str(&json_string(path(file)));
-                    output.push('\n');
-                }
-
-                if omitted != 0 {
-                    output.push_str(&format!("- {omitted} paths omitted\n"));
-                }
-
-                if !tree.is_empty() || omitted != 0 {
-                    output.push('\n');
-                }
-
-                output.push_str(&blocks);
-                output
-            }
-        })
+        let mut output = Vec::new();
+        render_into(
+            &mut output,
+            index,
+            tiers,
+            selection,
+            tree,
+            config.output_format,
+        )
+        .expect("writing to a Vec cannot fail");
+        Ok(String::from_utf8(output).expect("repository framing preserves UTF-8"))
     }
 ```
 
@@ -420,6 +350,9 @@ failures, or a budget smaller than the output framing.
                     selected_tiers: selected.tiers,
                 });
             }
+
+            // Release oversized output before counting replacement tiers.
+            drop(content);
 
             let mut best: Option<(f64, f64, FileId, FidelityLevel)> = None;
 
