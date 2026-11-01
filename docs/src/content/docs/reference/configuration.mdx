@@ -1,0 +1,52 @@
+---
+title: Configuration
+description: Python and Rust pipeline settings and their defaults.
+---
+
+import ConfigurationSettings from "../../../components/ConfigurationSettings.astro";
+
+These settings apply to the next pipeline run. The CLI maps its options to the same configuration, and numeric limits must be positive.
+
+Each setting name links directly to its entry, so you can bookmark or share it.
+
+## Budget, focus, and output
+
+Choose what the artifact should prioritize and how it is serialized.
+
+<ConfigurationSettings names={["budget_tokens", "focus_query", "focus_files", "output_format"]} />
+
+## Files and privacy
+
+Control which files are read and whether recognized secrets are redacted.
+
+<ConfigurationSettings names={["exclude_patterns", "respect_gitignore", "redact_secrets", "max_file_size_bytes"]} />
+
+## Execution and token accounting
+
+Configure parallel analysis and the vocabulary used to count tokens.
+
+<ConfigurationSettings names={["enable_parallel", "tokenizer_encoding", "allow_token_estimates"]} />
+
+## Assign settings in Python
+
+```python
+from contextcraft import Config, ContextCraft
+
+config = Config(budget_tokens=8_000, focus_query="authentication")
+pipeline = ContextCraft(config)
+pipeline.config.focus_files = ["src/auth"]
+```
+
+The pipeline retains the supplied configuration and copies its settings before each run. List attributes return copies, so assign a new list instead of modifying a returned list.
+
+## Output and tokenizer constants
+
+`OutputFormat` exposes `MARKDOWN`, `XML`, and `JSON`. `TokenizerEncoding` exposes `GPT2`, `R50K_BASE`, `P50K_BASE`, `P50K_EDIT`, `CL100K_BASE`, `O200K_BASE`, and `O200K_HARMONY`.
+
+These native constants are hashable, but are not Python `enum.Enum` members. Use `.as_str()` for their configuration or output labels.
+
+## API details
+
+- [Python Config API](../api/contextcraft/#class.Config)
+- [Rust core configuration](../api/rust/contextcraft-ai-core/#struct.Config)
+- [CLI options](../cli/)

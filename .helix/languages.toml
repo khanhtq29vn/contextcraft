@@ -1,0 +1,16 @@
+[language-server.pyrefly]
+command = "pyrefly"
+args = ["lsp"]
+
+[language-server.ty]
+command = "ty"
+args = ["server"]
+
+[language-server.ruff]
+command = "ruff"
+args = ["server"]
+
+[[language]]
+name = "python"
+language-servers = ["pyrefly", "ty", "ruff"]
+formatter = { command = "sh", args = ["-c", "ruff check --select I --fix - | ruff format -"] }

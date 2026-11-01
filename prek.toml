@@ -1,0 +1,72 @@
+default_stages = ["pre-commit"]
+default_install_hook_types = ["pre-commit", "pre-push"]
+
+[[repos]]
+repo = "https://github.com/pre-commit/pre-commit-hooks"
+rev = "v6.0.0"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-yaml", args = ["--allow-multiple-documents"] },
+  { id = "check-toml" },
+  { id = "check-added-large-files", args = ["--maxkb=3000"] },
+  { id = "detect-private-key" },
+]
+
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.17.3"
+hooks = [
+  { id = "ruff-check", args = ["--fix", "--exit-non-zero-on-fix"] },
+  { id = "ruff-format" },
+]
+
+[[repos]]
+repo = "https://github.com/meta/pyrefly-pre-commit"
+rev = "1.4.0"
+
+[[repos.hooks]]
+id = "pyrefly-check"
+name = "Pyrefly"
+entry = "uv run --locked --package contextcraft-ai --extra cli --group dev pyrefly check binding_python/python/contextcraft"
+language = "system"
+pass_filenames = false
+stages = ["pre-commit"]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "cargo-fmt"
+name = "Rust formatting"
+entry = "cargo fmt --all -- --check"
+language = "system"
+files = '(^|/)(Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|.*\.rs)$'
+pass_filenames = false
+stages = ["pre-commit"]
+
+[[repos.hooks]]
+id = "gen-docs"
+name = "Generate API documentation"
+entry = "just gen-docs"
+language = "system"
+pass_filenames = false
+stages = ["pre-commit"]
+
+[[repos.hooks]]
+id = "cargo-lint"
+name = "Rust lint"
+entry = "cargo lint"
+language = "system"
+files = '(^|/)(Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|.*\.rs)$'
+pass_filenames = false
+stages = ["pre-push"]
+
+[[repos.hooks]]
+id = "cargo-test"
+name = "Rust tests"
+entry = "just test-rust"
+language = "system"
+files = '(^|/)(Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|.*\.rs)$'
+pass_filenames = false
+stages = ["pre-push"]

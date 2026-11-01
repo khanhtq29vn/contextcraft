@@ -1,0 +1,90 @@
+---
+import FileIcon from "./FileIcon.astro";
+import FlowBars from "./FlowBars.astro";
+
+const ranks = [90, 81, 73, 68, 59, 51, 46, 39, 33, 27, 20];
+const output = [91, 62, 84, 86, 79, 46, 80, 69, 55];
+---
+
+<section
+  class="process wrap"
+  aria-label="From repository to context: an illustrative example"
+>
+  <ol class="process-steps">
+    <li>
+      <div class="stage-heading">
+        <span class="stage-number">01</span>
+        <h2>Repository</h2>
+        <p>Your codebase, in full.</p>
+      </div>
+      <div class="source-sheet">
+        <div class="source-files">
+          <div class="source-entry">
+            <FileIcon folder /><code>your-repo/</code>
+          </div>
+          <div class="source-entry"><FileIcon folder /><code>src/</code></div>
+          <div class="source-entry"><FileIcon folder /><code>tests/</code></div>
+          <div class="source-entry"><FileIcon folder /><code>docs/</code></div>
+          <div class="source-entry">
+            <FileIcon folder /><code>scripts/</code>
+          </div>
+          <div class="source-entry">
+            <FileIcon /><code>pyproject.toml</code>
+          </div>
+          <div class="source-entry"><FileIcon /><code>README.md</code></div>
+        </div>
+      </div>
+      <svg class="process-arrow" viewBox="0 0 32 24" aria-hidden="true">
+        <path d="M2 12h27m-6-6 6 6-6 6" />
+      </svg>
+    </li>
+    <li>
+      <div class="stage-heading">
+        <span class="stage-number">02</span>
+        <h2>Rank by relevance</h2>
+        <p>Find and prioritize what’s relevant to your task.</p>
+      </div>
+      <div class="rank-bars" aria-label="Illustrative file relevance ranking">
+        <FlowBars ranks={ranks} emphasized={[0, 6]} />
+      </div>
+      <svg class="process-arrow" viewBox="0 0 32 24" aria-hidden="true">
+        <path d="M2 12h27m-6-6 6 6-6 6" />
+      </svg>
+    </li>
+    <li>
+      <div class="stage-heading">
+        <span class="stage-number">03</span>
+        <h2>Token budget</h2>
+        <p>Fit the most useful context within your limit.</p>
+      </div>
+      <div class="budget-figure">
+        <div class="budget-scale">
+          <span>More<br />relevant</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v18m-4-4 4 4 4-4" />
+          </svg>
+          <span>Less<br />relevant</span>
+        </div>
+        <div class="budget-plot">
+          <div class="budget-bars">
+            <FlowBars ranks={ranks.slice(0, 8)} emphasized={[0, 1, 2]} />
+          </div>
+          <span class="budget-caption">Token budget</span>
+        </div>
+      </div>
+      <svg class="process-arrow" viewBox="0 0 32 24" aria-hidden="true">
+        <path d="M2 12h27m-6-6 6 6-6 6" />
+      </svg>
+    </li>
+    <li>
+      <div class="stage-heading">
+        <span class="stage-number">04</span>
+        <h2>Context</h2>
+        <p>A concise, structured context for your language model.</p>
+      </div>
+      <div class="output-sheet" aria-label="Illustrative compressed context">
+        <FlowBars ranks={output} emphasized={[1, 5, 8]} />
+      </div>
+    </li>
+  </ol>
+</section>

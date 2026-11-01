@@ -1,0 +1,62 @@
+[project]
+name = "contextcraft-ai"
+description = "AST-Aware, Personalized-PageRank-Ranked, Token-Budgeted Codebase Compressor for LLMs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "ContextCraft Contributors" }]
+keywords = ["llm", "context-compression", "ast", "tree-sitter", "pagerank", "knapsack", "code-analysis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dynamic = ["version"]
+
+[project.scripts]
+contextcraft = "contextcraft.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/khanhtq29vn/contextcraft"
+Documentation = "https://khanhtq29vn.github.io/contextcraft/"
+Repository = "https://github.com/khanhtq29vn/contextcraft"
+Issues = "https://github.com/khanhtq29vn/contextcraft/issues"
+
+[project.optional-dependencies]
+cli = [
+    "cyclopts>=4.25.3,<5",
+    "rich>=13",
+]
+
+[build-system]
+requires = ["maturin>=1.16,<2.0"]
+build-backend = "maturin"
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.maturin]
+profile = "release"
+module-name = "contextcraft.contextcraft"
+python-source = "python"
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.pyo"
+]

@@ -1,0 +1,11 @@
+---
+interface Props {
+  folder?: boolean;
+}
+
+const { folder = false } = Astro.props;
+---
+
+<svg class="file-icon" viewBox="0 0 24 24" aria-hidden="true">
+  <path d={folder ? "M3 7V5h6l2 3h10v12H3V7Zm0 1h8" : "M6 3h8l4 4v14H6V3Zm8 0v5h4"} />
+</svg>

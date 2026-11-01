@@ -4,37 +4,102 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to publish (for example, v0.2.0)
+        description: Release tag to publish
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
-  build:
-    name: Build distribution artifacts
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+  wheels:
+    name: Build wheel (${{ matrix.os }}, ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64
+          - os: ubuntu-24.04-arm
+            target: aarch64
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64
+          - os: macos-latest
+            target: x86_64
+          - os: windows-latest
+            target: x86_64
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ inputs.tag }}
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          architecture: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
 
-      - name: Build sdist and wheel
-        run: uv build
+      - name: Build ABI3 wheel for Python 3.10+
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --manifest-path binding_python/Cargo.toml --release --locked --out dist
 
-      - name: Upload build artifacts
+      - name: Smoke-test ARM64 wheel
+        if: startsWith(matrix.target, 'aarch64')
+        shell: python {0}
+        run: |
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          wheel, = Path("dist").glob("*.whl")
+          subprocess.run(
+              [sys.executable, "-m", "pip", "install", "--no-deps", str(wheel)],
+              check=True,
+          )
+          subprocess.run(
+              [sys.executable, "-c", "from contextcraft import TokenCounter; assert TokenCounter().count('hello') > 0"],
+              check=True,
+          )
+
+      - name: Upload wheel
         uses: actions/upload-artifact@v7
         with:
-          name: python-package-distributions
-          path: dist/
+          name: python-wheel-${{ matrix.os }}-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+
+      - name: Build source distribution
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --manifest-path binding_python/Cargo.toml --out dist
+
+      - name: Upload source distribution
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
 
   publish-pypi:
     name: Publish package to PyPI via Trusted Publishing (OIDC)
-    needs: build
+    needs: [wheels, sdist]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -46,7 +111,8 @@ jobs:
       - name: Download built artifacts
         uses: actions/download-artifact@v8
         with:
-          name: python-package-distributions
+          pattern: python-*
+          merge-multiple: true
           path: dist/
 
       - name: Publish to PyPI

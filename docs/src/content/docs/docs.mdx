@@ -1,0 +1,36 @@
+---
+title: Context for your next task
+description: Compress a local repository into useful context that fits your language model’s token budget.
+sidebar:
+  label: Overview
+prev: false
+next:
+  label: Your first context file
+  link: /contextcraft/getting-started/quickstart/
+---
+
+ContextCraft turns a local repository into context that fits a chosen token budget. It uses syntax and dependency relationships to decide which files need detail, and which can be represented by their structure.
+
+<div class="cc-actions">
+  <a class="cc-primary" href="/contextcraft/getting-started/quickstart/">Generate your first context file <span aria-hidden="true">&rarr;</span></a>
+  <a href="/contextcraft/python/quickstart/">Use the Python SDK</a>
+</div>
+
+## Keep the detail that matters
+
+ContextCraft ranks files and selects a fidelity level for each one: full source, a skeleton, signatures, or a path listing. It produces Markdown, XML, or JSON, with token accounting for the complete output.
+
+- [Understand the output](/contextcraft/getting-started/output/) explains what the four fidelity levels retain.
+- [Choose a token budget](/contextcraft/guides/token-budgets/) helps you leave room for your prompt and the model’s response.
+- [Focus on a task](/contextcraft/guides/focus/) shows how to favor relevant code with a query or paths.
+
+## Build it into your workflow
+
+The CLI and Python SDK use the same Rust core for parsing, dependency ranking, token counting, and budget allocation. Source analysis and tier rendering run in parallel by default. Each run reads and analyzes the repository again.
+
+| If you want to… | Start here |
+| --- | --- |
+| Generate context from the command line | [CLI quickstart](/contextcraft/getting-started/quickstart/) |
+| Call ContextCraft from Python | [Python SDK guide](/contextcraft/python/quickstart/) |
+| Use or extend the Rust pipeline | [Rust core API](/contextcraft/reference/api/rust/contextcraft-ai-core/) |
+| Look up an option or default | [CLI options](/contextcraft/reference/cli/) · [Configuration](/contextcraft/reference/configuration/) |

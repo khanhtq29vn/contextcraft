@@ -1,0 +1,111 @@
+<section class="context-demo" aria-label="Illustrative repository compression">
+  <div class="demo-source">
+    <div class="diagram-label">Your repository</div>
+    <div class="source-tree">
+      <strong>repository/</strong><span>src/config.py</span><span
+      >src/helpers.py</span><span class="source-focus">src/auth.py</span><span
+      >src/routes.py</span>
+    </div>
+  </div>
+  <div class="demo-task">
+    <span class="diagram-label">Your task</span>
+    <p>Investigate an<br /><strong>authentication bug.</strong></p>
+    <svg
+      class="flow-line"
+      viewBox="0 0 100 24"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path d="M0 12h99m-2-6 2 6-2 6" vector-effect="non-scaling-stroke" />
+    </svg>
+  </div>
+  <div class="demo-result">
+    <div class="demo-result-header">
+      <span class="diagram-label">The context to keep</span><div
+        class="budget-control"
+        role="group"
+        aria-label="Illustrative token budget"
+      >
+        <button type="button" disabled data-budget="4" aria-pressed="false">
+          4k
+        </button>
+        <button type="button" disabled data-budget="8" aria-pressed="true">
+          8k
+        </button>
+        <button type="button" disabled data-budget="16" aria-pressed="false">
+          16k
+        </button>
+      </div>
+    </div>
+    <div class="allocation">
+      <div>
+        <code>config.py</code><span data-tier="config">SIGS</span><i
+          style="--detail: 25%"
+          data-bar="config"
+        ></i>
+      </div>
+      <div>
+        <code>helpers.py</code><span data-tier="helpers">TREE</span><i
+          style="--detail: 7%"
+          data-bar="helpers"
+        ></i>
+      </div>
+      <div class="allocation-focus">
+        <code>auth.py</code><span data-tier="auth">FULL</span><i
+          style="--detail: 100%"
+          data-bar="auth"
+        ></i>
+      </div>
+      <div>
+        <code>routes.py</code><span data-tier="routes">SKEL</span><i
+          style="--detail: 55%"
+          data-bar="routes"
+        ></i>
+      </div>
+    </div>
+    <p class="demo-note" aria-live="polite">
+      8k budget · more detail for the code your task depends on.
+    </p>
+  </div>
+</section>
+
+<script>
+const demo = document.querySelector(".context-demo");
+if (demo) {
+  const levels = {
+    "4": ["SIGS", "TREE", "SKEL", "SIGS"],
+    "8": ["SIGS", "TREE", "FULL", "SKEL"],
+    "16": ["SKEL", "SIGS", "FULL", "FULL"],
+  };
+  const detail = { TREE: "7%", SIGS: "25%", SKEL: "55%", FULL: "100%" };
+  demo.querySelectorAll<HTMLButtonElement>("[data-budget]").forEach(
+    (button) => {
+      button.addEventListener("click", () => {
+        const budget = button.dataset.budget as keyof typeof levels;
+        if (!Object.prototype.hasOwnProperty.call(levels, budget)) return;
+        demo.querySelectorAll("[data-budget]").forEach((item) =>
+          item.setAttribute("aria-pressed", String(item === button))
+        );
+        ["config", "helpers", "auth", "routes"].forEach((file, index) => {
+          const tier = levels[budget][index] as keyof typeof detail;
+          const label = demo.querySelector(`[data-tier="${file}"]`);
+          const bar = demo.querySelector<HTMLElement>(`[data-bar="${file}"]`);
+          if (label) label.textContent = tier;
+          bar?.style.setProperty("--detail", detail[tier]);
+        });
+        const note = demo.querySelector(".demo-note");
+        if (note) {
+          note.textContent = `${budget}k budget · ${
+            budget === "4"
+              ? "a lighter outline when space is tight."
+              : budget === "16"
+              ? "more implementation detail across the repository."
+              : "more detail for the code your task depends on."
+          }`;
+        }
+      });
+      button.disabled = false;
+    },
+  );
+}
+</script>

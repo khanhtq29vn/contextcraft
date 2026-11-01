@@ -1,0 +1,12 @@
+---
+interface Props {
+  rank: number;
+  emphasis: boolean;
+}
+
+const { rank, emphasis } = Astro.props;
+---
+
+<div style={`--rank:${rank}%`} class:list={{ "emphasis-bar": emphasis }}>
+  <i></i>
+</div>

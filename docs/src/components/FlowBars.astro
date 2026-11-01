@@ -1,0 +1,16 @@
+---
+import FlowBar from "./FlowBar.astro";
+
+interface Props {
+  ranks: number[];
+  emphasized: number[];
+}
+
+const { ranks, emphasized } = Astro.props;
+const bars = ranks.map((rank, index) => ({
+  rank,
+  emphasis: emphasized.includes(index),
+}));
+---
+
+{bars.map(bar => <FlowBar {...bar} />)}

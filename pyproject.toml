@@ -1,140 +1,16 @@
-[build-system]
-requires = ["hatchling>=1.32.4"]
-build-backend = "hatchling.build"
-
-[project]
-name = "contextcraft-ai"
-version = "0.3.2"
-description = "AST-Aware, Dependency-Graph-Ranked, Token-Budgeted Semantic Codebase Compressor for LLMs"
-readme = "README.md"
-requires-python = ">=3.10"
-license = "MIT"
-authors = [{ name = "ContextCraft Contributors" }]
-keywords = [
-  "llm",
-  "context-compression",
-  "ast",
-  "tree-sitter",
-  "pagerank",
-  "knapsack",
-  "repomix",
-  "markitdown",
-  "code-analysis",
-  "ai-engineering",
-]
-classifiers = [
-  "Development Status :: 4 - Beta",
-  "Environment :: Console",
-  "Intended Audience :: Developers",
-  "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "Topic :: Scientific/Engineering :: Artificial Intelligence",
-  "Topic :: Software Development :: Compilers",
-  "Topic :: Software Development :: Libraries :: Python Modules",
-  "Typing :: Typed",
-]
-dependencies = [
-  "networkx>=3.4.2", # Python 3.10-compatible minimum; uv.lock selects newer releases.
-  "pathspec>=1.1.1",
-  "pydantic>=2.14.1",
-  "rich>=15.0.0",
-  "tiktoken>=0.14.0",
-  "tree-sitter>=0.26.0",
-  "tree-sitter-language-pack>=1.22.1",
-  "typer>=0.27.3",
-]
-
-[project.optional-dependencies]
-web = [
-  "fastapi>=0.159.1",
-  "httpx>=0.28.1",
-  "jinja2>=3.1.6",
-  "uvicorn>=0.54.0",
-]
+[dependency-groups]
 dev = [
-  "fastapi>=0.159.1",
-  "furo>=2024.8.6",
-  "httpx>=0.28.1",
-  "jinja2>=3.1.6",
-  "mypy>=2.4.0",
-  "myst-parser>=4.0",
-  "pre-commit>=4.6.2", # Python 3.10-compatible minimum; uv.lock selects newer releases.
-  "pytest>=9.1.1",
-  "pytest-cov>=7.1.0",
-  "ruff>=0.17.1",
-  "sphinx>=8.1",
-  "sphinx-autobuild>=2024.10.3",
-  "sphinxcontrib-katex>=0.9.11",
-  "types-networkx>=3.6.1.20261021",
-  "uvicorn>=0.54.0",
+    "maturin>=1.16.0",
+    "prek>=0.5.9",
+    "pyrefly>=1.4.0",
+    "ruff>=0.14.0",
 ]
 
-[project.scripts]
-contextcraft = "contextcraft.__main__:run_cli"
-contextcraft-ai = "contextcraft.__main__:run_cli"
+[tool.uv.workspace]
+members = ["binding_python"]
 
-[project.urls]
-Homepage = "https://github.com/khanhtq29vn/contextcraft"
-Documentation = "https://khanhtq29vn.github.io/contextcraft/"
-Repository = "https://github.com/khanhtq29vn/contextcraft"
-Issues = "https://github.com/khanhtq29vn/contextcraft/issues"
-
-[tool.hatch.build.targets.wheel]
-packages = ["contextcraft"]
-
-[tool.ruff]
-target-version = "py310"
-line-length = 100
-src = [".", "tests", "web", "benchmarks"]
-
-[tool.ruff.lint]
-select = [
-  "E", # pycodestyle errors
-  "W", # pycodestyle warnings
-  "F", # pyflakes
-  "I", # isort
-  "B", # flake8-bugbear
-  "C4", # flake8-comprehensions
-  "UP", # pyupgrade
-  "SIM", # flake8-simplify
-  "RUF", # Ruff-specific rules
+[tool.pyrefly]
+project-includes = [
+  "**/*.py*",
+  "**/*.ipynb",
 ]
-ignore = [
-  "E501", # line too long (handled by formatter)
-]
-
-[tool.ruff.lint.isort]
-known-first-party = ["contextcraft"]
-
-[tool.mypy]
-python_version = "3.10"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-no_implicit_optional = true
-mypy_path = "."
-packages = ["contextcraft"]
-
-[tool.pytest.ini_options]
-minversion = "8.0"
-addopts = "-ra -q --strict-markers --import-mode=importlib"
-testpaths = ["tests"]
-pythonpath = ["."]
-
-[tool.coverage.run]
-source = ["contextcraft"]
-branch = true
-omit = ["contextcraft/__main__.py"]
-
-[tool.coverage.report]
-show_missing = true
-skip_empty = true

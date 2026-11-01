@@ -1,0 +1,11 @@
+@import "@fontsource-variable/hanken-grotesk";
+@import "@fontsource-variable/hanken-grotesk/wght-italic.css";
+@import "@fontsource-variable/source-serif-4/standard.css";
+@import "@fontsource-variable/jetbrains-mono";
+
+:root {
+  --cc-font-body: "Hanken Grotesk Variable", "Segoe UI", sans-serif;
+  --cc-font-heading: "Source Serif 4 Variable", Georgia, serif;
+  --cc-font-code: "JetBrains Mono Variable", ui-monospace, monospace;
+  font-optical-sizing: auto;
+}

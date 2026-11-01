@@ -1,0 +1,81 @@
+---
+import { Icon } from "@astrojs/starlight/components";
+---
+
+<script is:inline>
+window.StarlightThemeProvider = (() => {
+  const storageKey = "starlight-theme";
+  const parse = (value) =>
+    value === "light" || value === "dark" ? value : "auto";
+  const system = typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-color-scheme: light)")
+    : null;
+  let preference = "auto";
+
+  try {
+    preference = parse(window.localStorage.getItem(storageKey));
+  } catch {
+    // Theme switching still works for this page when storage is unavailable.
+  }
+
+  const updatePickers = (value = preference) => {
+    const theme = parse(value);
+    document.querySelectorAll("starlight-theme-select").forEach((picker) => {
+      const select = picker.querySelector("select");
+      if (select) select.value = theme;
+      const template = document.querySelector("#theme-icons");
+      const icon = template?.content.querySelector("." + theme);
+      const current = picker.querySelector("svg.label-icon");
+      if (icon && current) {
+        current.replaceChildren(...icon.cloneNode(true).childNodes);
+      }
+    });
+  };
+
+  const setTheme = (value, persist = true) => {
+    preference = parse(value);
+    if (persist) {
+      try {
+        window.localStorage.setItem(
+          storageKey,
+          preference === "auto" ? "" : preference,
+        );
+      } catch {
+        // Retain the preference in memory for the current page.
+      }
+    }
+    const resolved = preference === "auto"
+      ? (system?.matches === false ? "dark" : "light")
+      : preference;
+    document.documentElement.dataset.theme = resolved;
+    document.querySelector("meta[name=\"theme-color\"]")?.setAttribute(
+      "content",
+      resolved === "dark" ? "#1b211d" : "#faf9f6",
+    );
+    updatePickers();
+  };
+
+  setTheme(preference, false);
+  return {
+    updatePickers,
+    setTheme,
+    getPreference: () => preference,
+    system,
+    storageKey,
+  };
+})();
+</script>
+
+<template id="theme-icons">
+  <Icon name="sun" class="light" />
+  <Icon name="moon" class="dark" />
+  <Icon name="laptop" class="auto" />
+</template>
+
+<noscript>
+  <style>
+  starlight-theme-select {
+    display: none !important;
+  }
+  </style>
+</noscript>
