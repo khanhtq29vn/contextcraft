@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::graphql"
 description: "GraphQL schema/operation outlines and explicitly imported local fragments."
 editUrl: false
 sidebar:
-  order: 32
+  order: 33
   hidden: true
 ---
 

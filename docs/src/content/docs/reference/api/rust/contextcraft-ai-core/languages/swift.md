@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::swift"
 description: "Swift outlines, local SwiftPM targets/products, and Xcode project/workspace metadata."
 editUrl: false
 sidebar:
-  order: 66
+  order: 73
   hidden: true
 ---
 

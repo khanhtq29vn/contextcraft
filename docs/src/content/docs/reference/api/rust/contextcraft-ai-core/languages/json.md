@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::json"
 description: "JSON key and scalar-value outlines."
 editUrl: false
 sidebar:
-  order: 39
+  order: 42
   hidden: true
 ---
 

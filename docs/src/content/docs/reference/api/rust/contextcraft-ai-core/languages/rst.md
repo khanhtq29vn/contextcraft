@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::rst"
 description: "reStructuredText outlines and literal local include dependencies."
 editUrl: false
 sidebar:
-  order: 54
+  order: 61
   hidden: true
 ---
 

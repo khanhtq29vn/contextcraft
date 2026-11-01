@@ -43,6 +43,32 @@ pub(super) fn extract(nodes: &[ts::Node<'_>], source: &[u8]) -> References {
             }
             continue;
         }
+        if matches!(node.kind(), "user_type" | "call_expression") {
+            let name = if node.kind() == "user_type" {
+                let mut cursor = node.walk();
+                node.named_children(&mut cursor)
+                    .filter(|child| child.kind() == "identifier")
+                    .map(|child| identifier(text(child, source)))
+                    .collect::<Vec<_>>()
+                    .join(".")
+            } else {
+                node.named_child(0)
+                    .filter(|child| child.kind() == "identifier")
+                    .map(|child| identifier(text(child, source)))
+                    .unwrap_or_default()
+            };
+            if !name.is_empty() {
+                references.imports.push((
+                    "type".into(),
+                    if package.is_empty() {
+                        name
+                    } else {
+                        format!("{package}.{name}")
+                    },
+                ));
+            }
+            continue;
+        }
         let mut parents = Vec::new();
         let mut parent = node.parent();
         let mut local = false;

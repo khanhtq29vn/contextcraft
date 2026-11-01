@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::markdown"
 description: "Markdown document outlines and literal local links/assets."
 editUrl: false
 sidebar:
-  order: 48
+  order: 51
   hidden: true
 ---
 

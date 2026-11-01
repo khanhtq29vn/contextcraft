@@ -13,10 +13,11 @@ use crate::error::Error;
 use crate::languages::{
     Language, bash::Bash, c::C, cmake::CMake, cpp::Cpp, csharp::CSharp, css::Css,
     detect::LanguageDetector, dockerfile::Dockerfile, elixir::Elixir, go::Go, graphql::Graphql,
-    hcl::Hcl, html::Html, javascript::JavaScript, json::Json, just::Just, kotlin::Kotlin, lua::Lua,
-    make::Make, markdown::Markdown, protobuf::Protobuf, python::Python, rst::Rst, ruby::Ruby,
-    rust::Rust, scala::Scala, scss::Scss, sql::Sql, svelte::Svelte, swift::Swift, toml::Toml,
-    typescript::TypeScript, vue::Vue, yaml::Yaml, zig::Zig,
+    hcl::Hcl, html::Html, java::Java, javascript::JavaScript, json::Json, just::Just,
+    kotlin::Kotlin, lua::Lua, make::Make, markdown::Markdown, php::Php, protobuf::Protobuf,
+    python::Python, r::R, rst::Rst, ruby::Ruby, rust::Rust, scala::Scala, scss::Scss, sql::Sql,
+    svelte::Svelte, swift::Swift, toml::Toml, typescript::TypeScript, vue::Vue, yaml::Yaml,
+    zig::Zig,
 };
 use crate::package::{Package, Workspace};
 
@@ -137,7 +138,10 @@ impl Indexer {
             Box::new(Lua),
             Box::new(Ruby),
             Box::new(Elixir),
+            Box::new(Java),
             Box::new(Kotlin),
+            Box::new(Php),
+            Box::new(R),
             Box::new(Zig),
             Box::new(Scala),
             Box::new(Swift),
@@ -208,9 +212,14 @@ impl Indexer {
 
         // Allocate every language's packages before linking dependencies between them.
         let mut detected = Vec::new();
+        let mut discovered = HashSet::new();
 
         for language in languages {
-            let packages = language.discover_packages(&index, config)?;
+            let packages = if discovered.insert(language.package_language()) {
+                language.discover_packages(&index, config)?
+            } else {
+                Vec::new()
+            };
             let has_sources = index
                 .files
                 .iter()
@@ -227,8 +236,13 @@ impl Indexer {
 
         index.assign_packages(fallback, &detected);
 
+        let mut resolved = HashSet::new();
         for mut language in detected {
-            let resolution = language.resolve_packages(&index, config)?;
+            let resolution = if resolved.insert(language.package_language()) {
+                language.resolve_packages(&index, config)?
+            } else {
+                crate::package::PackageResolution::default()
+            };
 
             for (id, package) in resolution.packages {
                 index.packages[id] = package;

@@ -16,7 +16,6 @@ use crate::package::PackageResolution;
 use crate::repo::{Analysis, Repository};
 
 mod dependencies;
-pub mod manifest;
 
 /// Kotlin grammar for `.kt` sources and `.kts` scripts.
 #[derive(Debug)]
@@ -25,6 +24,10 @@ pub struct Kotlin;
 impl Language for Kotlin {
     fn id(&self) -> &'static str {
         "kotlin"
+    }
+
+    fn package_language(&self) -> &'static str {
+        "jvm"
     }
 
     fn grammar(&self) -> ts::Language {
@@ -89,7 +92,7 @@ impl Language for Kotlin {
         index: &Index,
         config: &Config,
     ) -> Result<Vec<crate::package::Package>, Error> {
-        manifest::packages(index, config)
+        super::jvm::packages(index, config)
     }
 
     fn render_sigs(&self, source: &str, analysis: &Analysis) -> String {
@@ -105,7 +108,7 @@ impl Language for Kotlin {
         index: &Index,
         config: &Config,
     ) -> Result<PackageResolution, Error> {
-        manifest::discover(index, config)
+        super::jvm::discover(index, config)
     }
 
     fn ignore_patterns(&self) -> &'static [&'static str] {
@@ -136,5 +139,5 @@ fn resolve(
     repository: &Repository,
     references: &ArenaMap<FileId, local::References>,
 ) -> Vec<(FileId, FileId)> {
-    local::resolve_symbols(index, repository, references)
+    super::jvm::resolve(index, repository, references, "kotlin")
 }

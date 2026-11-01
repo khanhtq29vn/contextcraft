@@ -63,6 +63,9 @@ tree-sitter-scss.workspace = true
 tree-sitter-proto.workspace = true
 tree-sitter-cmake.workspace = true
 tree-sitter-postgres.workspace = true
+tree-sitter-java.workspace = true
+tree-sitter-php.workspace = true
+tree-sitter-r.workspace = true
 
 [dev-dependencies]
 tempfile = "3.27.0"

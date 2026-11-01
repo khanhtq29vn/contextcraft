@@ -43,28 +43,35 @@ sidebar:
 - [`contextcraft-ai-core::languages::go::dependencies`](rust/contextcraft-ai-core/languages/go/dependencies/): Extract dependency references from captured syntax nodes.
 - [`contextcraft-ai-core::languages::go::manifest`](rust/contextcraft-ai-core/languages/go/manifest/): Discover local package metadata and workspace relationships.
 - [`contextcraft-ai-core::languages::go::resolve`](rust/contextcraft-ai-core/languages/go/resolve/): Resolve captured references to indexed local files.
+- [`contextcraft-ai-core::languages::gradle`](rust/contextcraft-ai-core/languages/gradle/): Literal Gradle project includes, directory mappings, and project dependencies.
 - [`contextcraft-ai-core::languages::graphql`](rust/contextcraft-ai-core/languages/graphql/): GraphQL schema/operation outlines and explicitly imported local fragments.
 - [`contextcraft-ai-core::languages::hcl`](rust/contextcraft-ai-core/languages/hcl/): HCL outlines and Terraform directory-module dependencies.
 - [`contextcraft-ai-core::languages::html`](rust/contextcraft-ai-core/languages/html/): HTML structure, embedded JavaScript/CSS outlines, and literal local asset dependencies.
+- [`contextcraft-ai-core::languages::java`](rust/contextcraft-ai-core/languages/java/): Java outlines, shared JVM projects, and static local type imports.
+- [`contextcraft-ai-core::languages::java::manifest`](rust/contextcraft-ai-core/languages/java/manifest/): Static Maven coordinates, reactor membership, and local declared dependencies.
 - [`contextcraft-ai-core::languages::javascript`](rust/contextcraft-ai-core/languages/javascript/): JavaScript outlines, local workspace packages, and static module resolution.
 - [`contextcraft-ai-core::languages::javascript::dependencies`](rust/contextcraft-ai-core/languages/javascript/dependencies/): Extract dependency references from captured syntax nodes.
 - [`contextcraft-ai-core::languages::javascript::manifest`](rust/contextcraft-ai-core/languages/javascript/manifest/): Discover local npm and pnpm package/workspace relationships.
 - [`contextcraft-ai-core::languages::javascript::resolve`](rust/contextcraft-ai-core/languages/javascript/resolve/): Resolve captured references to indexed local files.
 - [`contextcraft-ai-core::languages::json`](rust/contextcraft-ai-core/languages/json/): JSON key and scalar-value outlines.
 - [`contextcraft-ai-core::languages::just`](rust/contextcraft-ai-core/languages/just/): Just outlines, explicit imports/modules, and named recipe dependencies.
+- [`contextcraft-ai-core::languages::jvm`](rust/contextcraft-ai-core/languages/jvm/): Shared Java/Kotlin project ownership and cross-language symbol resolution.
 - [`contextcraft-ai-core::languages::kotlin`](rust/contextcraft-ai-core/languages/kotlin/): Kotlin outlines, literal Gradle projects, and local package-qualified imports.
 - [`contextcraft-ai-core::languages::kotlin::dependencies`](rust/contextcraft-ai-core/languages/kotlin/dependencies/): Kotlin package-qualified declarations and explicit imports.
-- [`contextcraft-ai-core::languages::kotlin::manifest`](rust/contextcraft-ai-core/languages/kotlin/manifest/): Literal Gradle project includes, directory mappings, and project dependencies.
 - [`contextcraft-ai-core::languages::local`](rust/contextcraft-ai-core/languages/local/): Shared mechanics for static, repository-local language resolution.
 - [`contextcraft-ai-core::languages::lua`](rust/contextcraft-ai-core/languages/lua/): Lua outlines, LuaRocks metadata, and static local module dependencies.
 - [`contextcraft-ai-core::languages::lua::manifest`](rust/contextcraft-ai-core/languages/lua/manifest/): Static LuaRocks package names and declared local rock dependencies.
 - [`contextcraft-ai-core::languages::make`](rust/contextcraft-ai-core/languages/make/): Make outlines, literal includes, and source/target prerequisites.
 - [`contextcraft-ai-core::languages::markdown`](rust/contextcraft-ai-core/languages/markdown/): Markdown document outlines and literal local links/assets.
+- [`contextcraft-ai-core::languages::php`](rust/contextcraft-ai-core/languages/php/): PHP declarations, namespace imports, literal includes, and Composer autoload roots.
+- [`contextcraft-ai-core::languages::php::manifest`](rust/contextcraft-ai-core/languages/php/manifest/): Composer names, static autoload roots, and declared local path repositories.
 - [`contextcraft-ai-core::languages::protobuf`](rust/contextcraft-ai-core/languages/protobuf/): Protocol Buffers schema outlines and repository-root-relative imports.
 - [`contextcraft-ai-core::languages::python`](rust/contextcraft-ai-core/languages/python/): Python parsing, package discovery, and local import resolution.
 - [`contextcraft-ai-core::languages::python::dependencies`](rust/contextcraft-ai-core/languages/python/dependencies/): Extract dependency references from captured syntax nodes.
 - [`contextcraft-ai-core::languages::python::manifest`](rust/contextcraft-ai-core/languages/python/manifest/): Discover local package metadata and workspace relationships.
 - [`contextcraft-ai-core::languages::python::resolve`](rust/contextcraft-ai-core/languages/python/resolve/): Resolve captured references to indexed local files.
+- [`contextcraft-ai-core::languages::r`](rust/contextcraft-ai-core/languages/r/): R function outlines, literal source calls, and static local package namespaces.
+- [`contextcraft-ai-core::languages::r::manifest`](rust/contextcraft-ai-core/languages/r/manifest/): R DESCRIPTION fields and named dependencies between indexed local packages.
 - [`contextcraft-ai-core::languages::rst`](rust/contextcraft-ai-core/languages/rst/): reStructuredText outlines and literal local include dependencies.
 - [`contextcraft-ai-core::languages::ruby`](rust/contextcraft-ai-core/languages/ruby/): Ruby `.rb` outlines, local Bundler gems, and literal load dependencies.
 - [`contextcraft-ai-core::languages::ruby::manifest`](rust/contextcraft-ai-core/languages/ruby/manifest/): Literal gemspec names and Bundler local path dependencies, without evaluating Ruby.

@@ -126,7 +126,10 @@ exclusion is invalid, or package metadata cannot be read or parsed.
             Box::new(Lua),
             Box::new(Ruby),
             Box::new(Elixir),
+            Box::new(Java),
             Box::new(Kotlin),
+            Box::new(Php),
+            Box::new(R),
             Box::new(Zig),
             Box::new(Scala),
             Box::new(Swift),
@@ -197,9 +200,14 @@ exclusion is invalid, or package metadata cannot be read or parsed.
 
         // Allocate every language's packages before linking dependencies between them.
         let mut detected = Vec::new();
+        let mut discovered = HashSet::new();
 
         for language in languages {
-            let packages = language.discover_packages(&index, config)?;
+            let packages = if discovered.insert(language.package_language()) {
+                language.discover_packages(&index, config)?
+            } else {
+                Vec::new()
+            };
             let has_sources = index
                 .files
                 .iter()
@@ -216,8 +224,13 @@ exclusion is invalid, or package metadata cannot be read or parsed.
 
         index.assign_packages(fallback, &detected);
 
+        let mut resolved = HashSet::new();
         for mut language in detected {
-            let resolution = language.resolve_packages(&index, config)?;
+            let resolution = if resolved.insert(language.package_language()) {
+                language.resolve_packages(&index, config)?
+            } else {
+                crate::package::PackageResolution::default()
+            };
 
             for (id, package) in resolution.packages {
                 index.packages[id] = package;

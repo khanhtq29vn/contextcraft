@@ -11,3 +11,6 @@
   (property_declaration)
   (type_alias)
 ] @dependency
+
+(user_type) @dependency
+(call_expression) @dependency

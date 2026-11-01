@@ -1,9 +1,9 @@
 ---
-title: "contextcraft-ai-core::languages::kotlin::manifest"
+title: "contextcraft-ai-core::languages::gradle"
 description: "Literal Gradle project includes, directory mappings, and project dependencies."
 editUrl: false
 sidebar:
-  order: 43
+  order: 32
   hidden: true
 ---
 
@@ -45,7 +45,7 @@ names in one settings file map to the same local directory. Oversized files are 
 ```rust
 pub fn packages(index: &Index, config: &Config) -> Result<Vec<Package>, Error> {
     let mut packages: BTreeMap<_, _> =
-        local::discover(index, "kotlin", &[], &["build.gradle", "build.gradle.kts"])
+        local::discover(index, "jvm", &[], &["build.gradle", "build.gradle.kts"])
             .into_iter()
             .map(|package| (package.root.clone(), package))
             .collect();
@@ -62,7 +62,7 @@ pub fn packages(index: &Index, config: &Config) -> Result<Vec<Package>, Error> {
             let package = packages.entry(root.clone()).or_insert_with(|| Package {
                 root,
                 name: None,
-                language: Some("kotlin"),
+                language: Some("jvm"),
                 manifests: Vec::new(),
                 targets: Vec::new(),
                 dependencies: Vec::new(),
@@ -115,7 +115,7 @@ pub fn discover(index: &Index, config: &Config) -> Result<PackageResolution, Err
     let roots: HashMap<_, _> = index
         .packages
         .iter()
-        .filter(|(_, package)| package.language == Some("kotlin"))
+        .filter(|(_, package)| package.language == Some("jvm"))
         .map(|(id, package)| (package.root.as_path(), id))
         .collect();
     let mut workspaces = Vec::new();
@@ -130,7 +130,7 @@ pub fn discover(index: &Index, config: &Config) -> Result<PackageResolution, Err
         members.dedup();
         resolution.workspaces.push(Workspace {
             root: document.root,
-            language: "kotlin",
+            language: "jvm",
             members,
         });
         workspaces.push(projects);
@@ -140,7 +140,9 @@ pub fn discover(index: &Index, config: &Config) -> Result<PackageResolution, Err
         package.targets = index
             .files
             .iter()
-            .filter(|(_, file)| file.package_id == id && file.language == Some("kotlin"))
+            .filter(|(_, file)| {
+                file.package_id == id && matches!(file.language, Some("java" | "kotlin"))
+            })
             .map(|(id, _)| id)
             .collect();
         if let Some(manifest) = package.manifests.iter().find(|path| {

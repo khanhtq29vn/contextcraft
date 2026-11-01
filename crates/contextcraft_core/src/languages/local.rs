@@ -16,11 +16,7 @@ use crate::index::{FileId, Index, PackageId};
 use crate::package::{Package, local_path};
 use crate::repo::Repository;
 
-#[derive(Debug, Default, Clone)]
-pub(super) struct References {
-    pub imports: Vec<(String, String)>,
-    pub exports: Vec<String>,
-}
+pub(super) use super::SymbolReferences as References;
 
 type Extract = fn(&[ts::Node<'_>], &[u8]) -> References;
 type Resolve = fn(&Index, &Repository, &ArenaMap<FileId, References>) -> Vec<(FileId, FileId)>;
@@ -43,6 +39,10 @@ impl DependencyAnalysis {
 }
 
 impl LanguageAnalysis for DependencyAnalysis {
+    fn symbol_references(&self) -> ArenaMap<FileId, References> {
+        self.references.lock().unwrap().clone()
+    }
+
     fn extract_dependencies(&self, file: FileId, nodes: &[ts::Node<'_>], source: &[u8]) {
         let references = (self.extract)(nodes, source);
         self.references.lock().unwrap().insert(file, references);
@@ -53,7 +53,8 @@ impl LanguageAnalysis for DependencyAnalysis {
         index: &Index,
         repository: &Repository,
     ) -> Vec<(FileId, FileId)> {
-        (self.resolve)(index, repository, &self.references.lock().unwrap())
+        let references = self.symbol_references();
+        (self.resolve)(index, repository, &references)
     }
 }
 
@@ -249,7 +250,10 @@ pub(super) fn resolve_symbols(
                 let descendants = exports
                     .range(prefix.as_str()..)
                     .take_while(|(export, _)| export.starts_with(&prefix))
-                    .filter(|_| kind == "namespace")
+                    .filter(|(export, _)| {
+                        kind == "namespace"
+                            || kind == "package" && !export[prefix.len()..].contains('.')
+                    })
                     .map(|(_, targets)| targets);
                 for targets in exports.get(name.as_str()).into_iter().chain(descendants) {
                     for &target in targets {

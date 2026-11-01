@@ -92,9 +92,18 @@ export default {
                     { label: "resolve", slug: "reference/api/rust/contextcraft-ai-core/languages/go/resolve" },
                   ],
                 },
+                { label: "gradle", slug: "reference/api/rust/contextcraft-ai-core/languages/gradle" },
                 { label: "graphql", slug: "reference/api/rust/contextcraft-ai-core/languages/graphql" },
                 { label: "hcl", slug: "reference/api/rust/contextcraft-ai-core/languages/hcl" },
                 { label: "html", slug: "reference/api/rust/contextcraft-ai-core/languages/html" },
+                {
+                  label: "java",
+                  collapsed: true,
+                  items: [
+                    { label: "Overview", slug: "reference/api/rust/contextcraft-ai-core/languages/java" },
+                    { label: "manifest", slug: "reference/api/rust/contextcraft-ai-core/languages/java/manifest" },
+                  ],
+                },
                 {
                   label: "javascript",
                   collapsed: true,
@@ -107,13 +116,13 @@ export default {
                 },
                 { label: "json", slug: "reference/api/rust/contextcraft-ai-core/languages/json" },
                 { label: "just", slug: "reference/api/rust/contextcraft-ai-core/languages/just" },
+                { label: "jvm", slug: "reference/api/rust/contextcraft-ai-core/languages/jvm" },
                 {
                   label: "kotlin",
                   collapsed: true,
                   items: [
                     { label: "Overview", slug: "reference/api/rust/contextcraft-ai-core/languages/kotlin" },
                     { label: "dependencies", slug: "reference/api/rust/contextcraft-ai-core/languages/kotlin/dependencies" },
-                    { label: "manifest", slug: "reference/api/rust/contextcraft-ai-core/languages/kotlin/manifest" },
                   ],
                 },
                 { label: "local", slug: "reference/api/rust/contextcraft-ai-core/languages/local" },
@@ -127,6 +136,14 @@ export default {
                 },
                 { label: "make", slug: "reference/api/rust/contextcraft-ai-core/languages/make" },
                 { label: "markdown", slug: "reference/api/rust/contextcraft-ai-core/languages/markdown" },
+                {
+                  label: "php",
+                  collapsed: true,
+                  items: [
+                    { label: "Overview", slug: "reference/api/rust/contextcraft-ai-core/languages/php" },
+                    { label: "manifest", slug: "reference/api/rust/contextcraft-ai-core/languages/php/manifest" },
+                  ],
+                },
                 { label: "protobuf", slug: "reference/api/rust/contextcraft-ai-core/languages/protobuf" },
                 {
                   label: "python",
@@ -136,6 +153,14 @@ export default {
                     { label: "dependencies", slug: "reference/api/rust/contextcraft-ai-core/languages/python/dependencies" },
                     { label: "manifest", slug: "reference/api/rust/contextcraft-ai-core/languages/python/manifest" },
                     { label: "resolve", slug: "reference/api/rust/contextcraft-ai-core/languages/python/resolve" },
+                  ],
+                },
+                {
+                  label: "r",
+                  collapsed: true,
+                  items: [
+                    { label: "Overview", slug: "reference/api/rust/contextcraft-ai-core/languages/r" },
+                    { label: "manifest", slug: "reference/api/rust/contextcraft-ai-core/languages/r/manifest" },
                   ],
                 },
                 { label: "rst", slug: "reference/api/rust/contextcraft-ai-core/languages/rst" },

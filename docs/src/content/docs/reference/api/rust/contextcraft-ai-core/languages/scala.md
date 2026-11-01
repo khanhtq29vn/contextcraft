@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::scala"
 description: "Scala outlines, literal sbt projects, and local namespace imports."
 editUrl: false
 sidebar:
-  order: 61
+  order: 68
   hidden: true
 ---
 

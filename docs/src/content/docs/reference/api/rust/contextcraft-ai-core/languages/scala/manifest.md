@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::scala::manifest"
 description: "Literal sbt project roots, dependsOn relationships, and build membership."
 editUrl: false
 sidebar:
-  order: 62
+  order: 69
   hidden: true
 ---
 

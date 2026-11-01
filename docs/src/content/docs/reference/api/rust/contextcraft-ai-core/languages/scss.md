@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::scss"
 description: "SCSS outlines and local Sass filesystem imports using the modern SCSS grammar."
 editUrl: false
 sidebar:
-  order: 63
+  order: 70
   hidden: true
 ---
 

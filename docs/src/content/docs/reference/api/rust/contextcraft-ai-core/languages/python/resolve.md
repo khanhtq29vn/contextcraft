@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::python::resolve"
 description: "Resolve captured references to indexed local files."
 editUrl: false
 sidebar:
-  order: 53
+  order: 58
   hidden: true
 ---
 

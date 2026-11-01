@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::swift::manifest"
 description: "Static SwiftPM targets, products, and local package dependencies."
 editUrl: false
 sidebar:
-  order: 67
+  order: 74
   hidden: true
 ---
 

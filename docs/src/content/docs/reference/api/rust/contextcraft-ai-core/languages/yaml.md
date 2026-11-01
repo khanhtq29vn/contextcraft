@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::yaml"
 description: "YAML key and scalar-value outlines."
 editUrl: false
 sidebar:
-  order: 72
+  order: 79
   hidden: true
 ---
 

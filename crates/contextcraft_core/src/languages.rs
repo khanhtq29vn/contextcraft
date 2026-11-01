@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
+use la_arena::ArenaMap;
 use tree_sitter as ts;
 use ts::StreamingIterator;
 
@@ -15,6 +16,7 @@ use crate::package::{Package, PackageResolution};
 use crate::repo::{Analysis, Repository};
 
 mod component;
+mod jvm;
 mod local;
 
 pub mod bash;
@@ -27,9 +29,11 @@ pub mod detect;
 pub mod dockerfile;
 pub mod elixir;
 pub mod go;
+pub mod gradle;
 pub mod graphql;
 pub mod hcl;
 pub mod html;
+pub mod java;
 pub mod javascript;
 pub mod json;
 pub mod just;
@@ -37,8 +41,10 @@ pub mod kotlin;
 pub mod lua;
 pub mod make;
 pub mod markdown;
+pub mod php;
 pub mod protobuf;
 pub mod python;
+pub mod r;
 pub mod rst;
 pub mod ruby;
 pub mod rust;
@@ -53,6 +59,15 @@ pub mod vue;
 pub mod yaml;
 pub mod zig;
 
+/// Static imports and exported names used by local symbol resolution.
+#[derive(Debug, Default, Clone)]
+pub struct SymbolReferences {
+    /// Language-specific import kind and static reference.
+    pub imports: Vec<(String, String)>,
+    /// Qualified names declared by this file.
+    pub exports: Vec<String>,
+}
+
 /// Per-repository state shared by parallel file analysis and dependency resolution.
 ///
 /// [`RepositoryReader`](crate::repo::RepositoryReader) may call
@@ -64,6 +79,11 @@ pub trait LanguageAnalysis: Debug + Send + Sync {
     ///
     /// Nodes and byte offsets refer to `source`, after optional secret redaction.
     fn extract_dependencies(&self, _file: FileId, _nodes: &[ts::Node<'_>], _source: &[u8]) {}
+
+    /// Returns a snapshot of static symbols for cooperating language implementations.
+    fn symbol_references(&self) -> ArenaMap<FileId, SymbolReferences> {
+        ArenaMap::new()
+    }
 
     /// Returns directed `(importer, dependency)` file edges within the index.
     /// Defaults to no dependencies.
@@ -83,7 +103,10 @@ pub trait Language: Debug + Send + Sync {
     /// Returns the stable language ID used by the index and analysis maps.
     fn id(&self) -> &'static str;
 
-    /// Dialects with different grammars can share project ownership.
+    /// Languages with different grammars can share project ownership.
+    ///
+    /// Package hooks run once per returned ID, using the first registered
+    /// implementation. Its hooks must handle every language in that package family.
     fn package_language(&self) -> &'static str {
         self.id()
     }

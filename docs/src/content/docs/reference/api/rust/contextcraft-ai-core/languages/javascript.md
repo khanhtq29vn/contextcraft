@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::javascript"
 description: "JavaScript outlines, local workspace packages, and static module resolution."
 editUrl: false
 sidebar:
-  order: 35
+  order: 38
   hidden: true
 ---
 

@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::protobuf"
 description: "Protocol Buffers schema outlines and repository-root-relative imports."
 editUrl: false
 sidebar:
-  order: 49
+  order: 54
   hidden: true
 ---
 

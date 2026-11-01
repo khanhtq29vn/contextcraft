@@ -11,6 +11,23 @@ sidebar:
 
 Language grammars, outline capture queries, and local dependency resolution.
 
+## Structs
+
+### <span id="struct.SymbolReferences"></span><code style="font-size: 0.85em">struct SymbolReferences</code>
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+**Derives:** `Debug`, `Default`, `Clone`
+
+Static imports and exported names used by local symbol resolution.
+
+#### Fields
+
+| Name | Type | Description |
+|------|------|-------------|
+| `imports` | `Vec<(String, String)>` | Language-specific import kind and static reference. |
+| `exports` | `Vec<String>` | Qualified names declared by this file. |
+
 ## Traits
 
 ### <span id="trait.LanguageAnalysis"></span><code style="font-size: 0.85em">trait LanguageAnalysis</code>
@@ -48,6 +65,25 @@ Nodes and byte offsets refer to `source`, after optional secret redaction.
 
 ```rust
     fn extract_dependencies(&self, _file: FileId, _nodes: &[ts::Node<'_>], _source: &[u8]) {}
+```
+
+</details>
+
+##### <span id="LanguageAnalysis.symbol_references"></span><code>symbol_​references</code>
+
+```rust
+fn symbol_references(&self) -> ArenaMap<FileId, SymbolReferences>
+```
+
+Returns a snapshot of static symbols for cooperating language implementations.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn symbol_references(&self) -> ArenaMap<FileId, SymbolReferences> {
+        ArenaMap::new()
+    }
 ```
 
 </details>
@@ -112,7 +148,10 @@ Returns the stable language ID used by the index and analysis maps.
 fn package_language(&self) -> &'static str
 ```
 
-Dialects with different grammars can share project ownership.
+Languages with different grammars can share project ownership.
+
+Package hooks run once per returned ID, using the first registered
+implementation. Its hooks must handle every language in that package family.
 
 <details>
 <summary>Source</summary>

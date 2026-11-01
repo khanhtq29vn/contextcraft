@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::rust"
 description: "Rust parsing, Cargo workspace discovery, and local module resolution."
 editUrl: false
 sidebar:
-  order: 57
+  order: 64
   hidden: true
 ---
 

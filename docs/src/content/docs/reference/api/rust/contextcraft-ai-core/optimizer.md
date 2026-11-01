@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::optimizer"
 description: "Select fidelity tiers using score-weighted utility per token."
 editUrl: false
 sidebar:
-  order: 74
+  order: 81
   hidden: true
 ---
 
