@@ -419,6 +419,7 @@ Returns an error if the parser cannot use the grammar or produce a tree.
         ] {
             ranges.sort_unstable_by_key(|range| (range.start, range.end));
             ranges.dedup();
+            ranges.shrink_to_fit();
         }
 
         state.extract_dependencies(file, &dependencies, source);

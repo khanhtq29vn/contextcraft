@@ -233,6 +233,34 @@ Directed local file dependencies with importer-to-dependency edges.
 
 Rendered source content and its cached or estimated framed token cost.
 
+Identical fallback tiers retain shared Rust storage. Accessing `content` from
+Python creates a Python string without changing the shared source.
+
+#### Methods
+
+##### <span id="RenderedTier.content"></span><code>content</code>
+
+```python
+def content() -> str
+```
+
+> **Rust Implementation**: [`contextcraft-ai::RenderedTier::content`](../rust/contextcraft-ai/#RenderedTier.content)
+
+Source outline, full source, or path for the TREE tier.
+
+Exposed as the read-only Python property `tier.content`.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn content(&self) -> &str {
+        &self.content
+    }
+```
+
+</details>
+
 ### <span id="class.FileTiers"></span><code style="font-size: 0.85em">class FileTiers</code>
 
 > **Rust Implementation**: [`contextcraft-ai::FileTiers`](../rust/contextcraft-ai/#struct.FileTiers)

@@ -231,6 +231,7 @@ pub trait Language: Debug + Send + Sync {
         ] {
             ranges.sort_unstable_by_key(|range| (range.start, range.end));
             ranges.dedup();
+            ranges.shrink_to_fit();
         }
 
         state.extract_dependencies(file, &dependencies, source);

@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use contextcraft_core as core;
 use pyo3::exceptions::{
@@ -359,12 +360,27 @@ pub struct Graph {
 }
 
 /// Rendered source content and its cached or estimated framed token cost.
-#[pyclass(module = "contextcraft.contextcraft", frozen, get_all)]
+///
+/// Identical fallback tiers retain shared Rust storage. Accessing `content` from
+/// Python creates a Python string without changing the shared source.
+#[pyclass(module = "contextcraft.contextcraft", frozen)]
 pub struct RenderedTier {
-    /// Source outline, full source, or path for the TREE tier.
-    pub content: String,
+    /// Shared source outline, full source, or path for the TREE tier.
+    pub content: Arc<str>,
     /// Framed token cost. Unselected tiers may retain byte-based estimates.
+    #[pyo3(get)]
     pub framed_tokens: usize,
+}
+
+#[pymethods]
+impl RenderedTier {
+    /// Source outline, full source, or path for the TREE tier.
+    ///
+    /// Exposed as the read-only Python property `tier.content`.
+    #[getter]
+    fn content(&self) -> &str {
+        &self.content
+    }
 }
 
 /// Available fidelity levels for one indexed file.
@@ -430,6 +446,10 @@ impl RepositoryAnalysis {
             tiers,
             artifact,
         } = analysis;
+
+        // Dependency state is not part of the Python snapshot.
+        drop(repository.analyses);
+
         let file_id = |id: core::index::FileId| id.into_raw().into_u32() as usize;
         let package_id = |id: core::index::PackageId| id.into_raw().into_u32() as usize;
         let mut edges = Vec::with_capacity(graph.edge_count());
@@ -442,6 +462,7 @@ impl RepositoryAnalysis {
             );
         }
         edges.sort_unstable();
+        drop(graph);
 
         let files = index
             .files
@@ -572,7 +593,7 @@ impl RepositoryAnalysis {
                             Py::new(
                                 py,
                                 RenderedTier {
-                                    content: tier.content.to_string(),
+                                    content: tier.content,
                                     framed_tokens,
                                 },
                             )?,

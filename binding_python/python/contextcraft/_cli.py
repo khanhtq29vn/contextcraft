@@ -6,6 +6,7 @@ import re
 import sys
 from collections import Counter
 from collections.abc import Sequence
+from heapq import nsmallest
 from pathlib import Path
 from time import perf_counter
 from typing import Annotated
@@ -124,10 +125,7 @@ def _render_summary(
 ) -> None:
     index = analysis.index
     files = index.files
-    tiers = {
-        file_id: file_tiers.levels
-        for file_id, file_tiers in analysis.tiers.files.items()
-    }
+    tiers = analysis.tiers.files
     scores = analysis.scores
     artifact = analysis.artifact
     selected = artifact.selected_tiers
@@ -205,16 +203,16 @@ def _render_summary(
     ranked.add_column("Tier", justify="center")
     ranked.add_column("PageRank", justify="right")
     ranked.add_column("Tokens (selected / full)", justify="right")
-    for file_id in sorted(
-        files, key=lambda file_id: (-scores[file_id], files[file_id].path.as_posix())
-    )[:5]:
+    for file_id in nsmallest(
+        5, files, key=lambda file_id: (-scores[file_id], files[file_id].path.as_posix())
+    ):
         level = selected[file_id]
         selected_tokens = (
             0
             if level == FidelityLevel.TREE
             else full_counts[file_id]
             if level == FidelityLevel.FULL
-            else counter.count(tiers[file_id][level].content)
+            else counter.count(tiers[file_id].levels[level].content)
         )
         ranked.add_row(
             files[file_id].path.as_posix(),
