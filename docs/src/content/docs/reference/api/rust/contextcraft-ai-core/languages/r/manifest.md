@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::r::manifest"
 description: "R DESCRIPTION fields and named dependencies between indexed local packages."
 editUrl: false
 sidebar:
-  order: 60
+  order: 61
   hidden: true
 ---
 

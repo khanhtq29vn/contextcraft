@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::typescript"
 description: "TypeScript and TSX parsing with JavaScript package ownership."
 editUrl: false
 sidebar:
-  order: 77
+  order: 78
   hidden: true
 ---
 

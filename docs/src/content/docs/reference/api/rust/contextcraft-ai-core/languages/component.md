@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::component"
 description: "Shared embedded-language outlines and file dependencies for Vue and Svelte."
 editUrl: false
 sidebar:
-  order: 18
+  order: 19
   hidden: true
 ---
 

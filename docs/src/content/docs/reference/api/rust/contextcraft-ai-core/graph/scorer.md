@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::graph::scorer"
 description: "API reference of the Rust module contextcraft-ai-core::graph::scorer."
 editUrl: false
 sidebar:
-  order: 10
+  order: 11
   hidden: true
 ---
 

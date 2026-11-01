@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::python::manifest"
 description: "Discover local package metadata and workspace relationships."
 editUrl: false
 sidebar:
-  order: 57
+  order: 58
   hidden: true
 ---
 

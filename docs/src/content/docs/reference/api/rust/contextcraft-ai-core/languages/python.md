@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::python"
 description: "Python parsing, package discovery, and local import resolution."
 editUrl: false
 sidebar:
-  order: 55
+  order: 56
   hidden: true
 ---
 

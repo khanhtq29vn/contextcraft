@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::kotlin"
 description: "Kotlin outlines, literal Gradle projects, and local package-qualified imports."
 editUrl: false
 sidebar:
-  order: 45
+  order: 46
   hidden: true
 ---
 

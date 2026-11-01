@@ -19,6 +19,7 @@ export default {
             { label: "Overview", slug: "reference/api/contextcraft" },
             { label: "__main__", slug: "reference/api/contextcraft/__main__" },
             { label: "_cli", slug: "reference/api/contextcraft/_cli" },
+            { label: "_preview", slug: "reference/api/contextcraft/_preview" },
             { label: "cli", slug: "reference/api/contextcraft/cli" },
           ],
         },

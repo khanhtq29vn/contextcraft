@@ -12,6 +12,7 @@ sidebar:
 - [`contextcraft`](contextcraft/): AST-aware, personalized-PageRank-ranked, token-budgeted codebase compression for LLMs.
 - [`contextcraft.__main__`](contextcraft/__main__/): Run the ContextCraft CLI with ``python -m contextcraft``.
 - [`contextcraft._cli`](contextcraft/_cli/): Cyclopts commands and Rich output for the optional CLI extra.
+- [`contextcraft._preview`](contextcraft/_preview/): Read-only, loopback-only preview of one analysis snapshot.
 - [`contextcraft.cli`](contextcraft/cli/): Load the optional Cyclopts and Rich command-line interface.
 
 ## Rust

@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::java"
 description: "Java outlines, shared JVM projects, and static local type imports."
 editUrl: false
 sidebar:
-  order: 36
+  order: 37
   hidden: true
 ---
 

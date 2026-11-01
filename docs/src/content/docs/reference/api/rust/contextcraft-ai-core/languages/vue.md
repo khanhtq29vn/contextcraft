@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::vue"
 description: "Vue single-file components with embedded script/style outlines and local imports."
 editUrl: false
 sidebar:
-  order: 78
+  order: 79
   hidden: true
 ---
 

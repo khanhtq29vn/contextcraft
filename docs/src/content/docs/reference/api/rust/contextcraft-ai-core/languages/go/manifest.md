@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::go::manifest"
 description: "Discover local package metadata and workspace relationships."
 editUrl: false
 sidebar:
-  order: 30
+  order: 31
   hidden: true
 ---
 

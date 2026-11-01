@@ -58,6 +58,7 @@ docs/_build/
 # ContextCraft caches and output
 .contextcraft_cache/
 .aider.tags.cache*/
+.impeccable/
 context_output.md
 context_output.xml
 context_output.json

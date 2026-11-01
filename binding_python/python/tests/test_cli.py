@@ -148,7 +148,7 @@ class CLITests(unittest.TestCase):
             self.assertIn("contextcraft-ai[cli]", stderr.getvalue())
 
     def test_markdown_is_rendered_on_a_terminal(self) -> None:
-        content = '## "__init__.py" [FULL]\n\n```\nprint("hello")\n```\n'
+        content = '## `__init__.py` (**FULL**)\n\n```\nprint("hello")\n```\n'
         with (
             patch("contextcraft._cli.sys.stdout") as stdout,
             patch("contextcraft._cli.Console") as console,
@@ -162,7 +162,7 @@ class CLITests(unittest.TestCase):
             stdout.buffer.write.assert_not_called()
 
     def test_piped_and_saved_output_preserve_exact_bytes(self) -> None:
-        content = '## "__init__.py" [FULL]\n\n```\ncafé\r\n日本語\n```\n'
+        content = "## `__init__.py` (**FULL**)\n\n```\ncafé\r\n日本語\n```\n"
         output = self.root / "artifact.md"
         _write_output(content, output, render_markdown=True)
         self.assertEqual(output.read_bytes(), content.encode("utf-8"))

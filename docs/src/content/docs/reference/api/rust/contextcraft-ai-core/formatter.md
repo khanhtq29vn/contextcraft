@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::formatter"
 description: "Render escaped Markdown, XML, or JSON and enforce the final token budget."
 editUrl: false
 sidebar:
-  order: 8
+  order: 9
   hidden: true
 ---
 
@@ -54,6 +54,8 @@ fn render_file(
 ```
 
 Renders one escaped file block. The path-only tier produces no block.
+
+Markdown paths use inline code; control characters are visibly escaped.
 
 **Examples:**
 

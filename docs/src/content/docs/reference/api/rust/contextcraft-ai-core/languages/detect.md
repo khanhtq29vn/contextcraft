@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::detect"
 description: "Filename, extension, and content-based language detection."
 editUrl: false
 sidebar:
-  order: 23
+  order: 24
   hidden: true
 ---
 

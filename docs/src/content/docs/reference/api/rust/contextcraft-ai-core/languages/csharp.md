@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::csharp"
 description: "C# outlines, .NET project references, and solution membership."
 editUrl: false
 sidebar:
-  order: 20
+  order: 21
   hidden: true
 ---
 

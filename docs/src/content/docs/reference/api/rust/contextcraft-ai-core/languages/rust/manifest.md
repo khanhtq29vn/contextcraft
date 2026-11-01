@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::rust::manifest"
 description: "Discover local package metadata and workspace relationships."
 editUrl: false
 sidebar:
-  order: 66
+  order: 67
   hidden: true
 ---
 

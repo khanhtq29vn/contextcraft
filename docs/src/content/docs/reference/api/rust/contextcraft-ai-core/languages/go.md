@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::go"
 description: "Go parsing, module discovery, and local import resolution."
 editUrl: false
 sidebar:
-  order: 28
+  order: 29
   hidden: true
 ---
 

@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::error"
 description: "Errors reported by repository analysis and artifact generation."
 editUrl: false
 sidebar:
-  order: 7
+  order: 8
   hidden: true
 ---
 

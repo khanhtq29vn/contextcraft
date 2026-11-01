@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::php::manifest"
 description: "Composer names, static autoload roots, and declared local path repositories."
 editUrl: false
 sidebar:
-  order: 53
+  order: 54
   hidden: true
 ---
 

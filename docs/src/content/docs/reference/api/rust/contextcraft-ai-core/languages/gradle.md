@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::gradle"
 description: "Literal Gradle project includes, directory mappings, and project dependencies."
 editUrl: false
 sidebar:
-  order: 32
+  order: 33
   hidden: true
 ---
 

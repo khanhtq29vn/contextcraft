@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::javascript::manifest"
 description: "Discover local npm and pnpm package/workspace relationships."
 editUrl: false
 sidebar:
-  order: 40
+  order: 41
   hidden: true
 ---
 

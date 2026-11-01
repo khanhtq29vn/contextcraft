@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::make"
 description: "Make outlines, literal includes, and source/target prerequisites."
 editUrl: false
 sidebar:
-  order: 50
+  order: 51
   hidden: true
 ---
 

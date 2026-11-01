@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::csharp::manifest"
 description: ".NET project references and solution membership, without evaluating MSBuild."
 editUrl: false
 sidebar:
-  order: 21
+  order: 22
   hidden: true
 ---
 

@@ -58,7 +58,7 @@ fn markdown_fences_are_longer_than_every_source_backtick_run() {
 
         assert!(fence.len() >= 3);
         assert!(fence.len() > longest);
-        assert!(block.contains("\"src/__init__.py\""));
+        assert!(block.starts_with("## `src/__init__.py` (**FULL**)\n\n"));
         assert!(block.ends_with(&format!("\n{fence}\n\n")));
         assert!(block.contains(content));
     }

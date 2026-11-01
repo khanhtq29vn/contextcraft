@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::r"
 description: "R function outlines, literal source calls, and static local package namespaces."
 editUrl: false
 sidebar:
-  order: 59
+  order: 60
   hidden: true
 ---
 

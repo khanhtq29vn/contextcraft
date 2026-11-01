@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::java::manifest"
 description: "Static Maven coordinates, reactor membership, and local declared dependencies."
 editUrl: false
 sidebar:
-  order: 37
+  order: 38
   hidden: true
 ---
 

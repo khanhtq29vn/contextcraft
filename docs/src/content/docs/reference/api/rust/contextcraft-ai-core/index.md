@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::index"
 description: "Discover files, package ownership, and local workspace relationships."
 editUrl: false
 sidebar:
-  order: 11
+  order: 12
   hidden: true
 ---
 

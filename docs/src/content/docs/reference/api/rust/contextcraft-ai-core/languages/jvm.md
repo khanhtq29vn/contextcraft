@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::jvm"
 description: "Shared Java/Kotlin project ownership and cross-language symbol resolution."
 editUrl: false
 sidebar:
-  order: 44
+  order: 45
   hidden: true
 ---
 

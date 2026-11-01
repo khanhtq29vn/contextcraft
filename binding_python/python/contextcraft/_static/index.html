@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#faf9f6">
+    <title>Playground · ContextCraft</title>
+    <script src="/theme.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&amp;family=JetBrains+Mono:wght@100..800&amp;family=Source+Serif+4:opsz,wght@8..60,200..900&amp;display=swap"
+    >
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#workspace">Skip to workspace</a>
+    <header class="site-header">
+      <span class="wordmark">ContextCraft</span>
+      <span class="app-name">Playground</span>
+      <div class="header-actions">
+        <a href="https://khanhtq29vn.github.io/contextcraft/">Documentation</a>
+        <label class="theme-label"><span class="sr-only">Theme</span>
+          <select id="theme" disabled>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="auto">Auto</option>
+          </select>
+        </label>
+      </div>
+    </header>
+    <div class="app-layout">
+      <aside class="sidebar" aria-label="Analysis snapshot">
+        <nav aria-label="Preview views">
+          <button id="show-artifact" type="button" aria-pressed="true">
+            Artifact
+          </button>
+          <button id="show-files" type="button" aria-pressed="false">
+            Files &amp; tiers
+          </button>
+        </nav>
+        <section class="snapshot" aria-labelledby="snapshot-heading">
+          <h2 id="snapshot-heading">Current snapshot</h2>
+          <p id="repository" class="repository">Loading repository…</p>
+          <p id="summary">Loading analysis…</p>
+          <dl class="snapshot-facts" hidden id="snapshot-facts">
+            <div>
+              <dt>Token budget</dt>
+              <dd id="budget-value"></dd>
+            </div>
+            <div>
+              <dt>Indexed files</dt>
+              <dd id="files-value"></dd>
+            </div>
+            <div>
+              <dt>Loaded files</dt>
+              <dd id="loaded-value"></dd>
+            </div>
+            <div>
+              <dt>Output format</dt>
+              <dd id="format-value"></dd>
+            </div>
+          </dl>
+        </section>
+        <section class="fidelity-guide" aria-labelledby="fidelity-heading">
+          <h2 id="fidelity-heading">Fidelity guide</h2>
+          <dl>
+            <div>
+              <dt>FULL</dt>
+              <dd>Complete source</dd>
+            </div>
+            <div>
+              <dt>SKEL</dt>
+              <dd>Structural outline</dd>
+            </div>
+            <div>
+              <dt>SIGS</dt>
+              <dd>Signatures &amp; imports</dd>
+            </div>
+            <div>
+              <dt>TREE</dt>
+              <dd>File path only</dd>
+            </div>
+          </dl>
+          <p>
+            Tiers can fall back to richer content when an outline is
+            unavailable.
+          </p>
+        </section>
+      </aside>
+      <main id="workspace" tabindex="-1">
+        <p id="status" role="status" aria-live="polite"></p>
+        <section id="artifact-view" aria-labelledby="artifact-heading">
+          <div class="section-header">
+            <div>
+              <h1 id="artifact-heading">Your context, assembled.</h1>
+              <p>The exact artifact generated from your repository.</p>
+            </div>
+            <div class="export-actions">
+              <button id="download" type="button" disabled>Download</button>
+              <button id="copy" class="primary" type="button" disabled>
+                Copy artifact
+              </button>
+            </div>
+          </div>
+          <div
+            id="artifact-display-controls"
+            class="artifact-display-controls"
+            hidden
+          >
+            <div role="group" aria-label="Artifact display">
+              <button
+                id="show-rendered"
+                type="button"
+                aria-pressed="false"
+                disabled
+              >
+                Preview
+              </button>
+              <button id="show-raw" type="button" aria-pressed="true">
+                Raw
+              </button>
+            </div>
+            <p id="render-status" role="status">Loading Markdown preview…</p>
+          </div>
+          <div class="code-surface">
+            <div class="code-toolbar">
+              <span id="artifact-name">context.md</span><span id="token-usage"
+              >Loading…</span>
+            </div>
+            <article
+              id="artifact-rendered"
+              class="markdown-content"
+              aria-label="Rendered artifact"
+              tabindex="0"
+              hidden
+            >
+            </article>
+            <textarea
+              id="artifact"
+              wrap="off"
+              readonly
+              spellcheck="false"
+              aria-labelledby="artifact-heading"
+            >Loading artifact…</textarea>
+          </div>
+          <p class="workspace-note">
+            Explore individual files and compare their representations in
+            <button id="explore-files" class="text-button" type="button">
+              Files &amp; tiers
+            </button>.
+          </p>
+        </section>
+        <section id="files-view" aria-labelledby="files-heading" hidden>
+          <div class="section-header">
+            <div>
+              <h1 id="files-heading">Files &amp; tiers</h1>
+              <p>
+                Explore relevance and compare how much detail each tier retains.
+              </p>
+            </div>
+          </div>
+          <div class="files-workspace">
+            <div class="file-browser">
+              <form id="filters">
+                <label for="search">Search paths</label>
+                <div class="search-row">
+                  <input
+                    id="search"
+                    type="search"
+                    maxlength="200"
+                    placeholder="Find a file…"
+                  ><button type="submit">Search</button>
+                </div>
+                <label class="checkbox-label"><input
+                    id="selected-only"
+                    type="checkbox"
+                    checked
+                  > Selected files only</label>
+              </form>
+              <p id="file-count" role="status"></p>
+              <div class="file-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Path</th>
+                      <th scope="col">Tier</th>
+                      <th scope="col">Relevance</th>
+                    </tr>
+                  </thead>
+                  <tbody id="file-list"></tbody>
+                </table>
+              </div>
+              <div class="pagination">
+                <button id="previous" type="button" disabled>Previous</button>
+                <button id="next" type="button" disabled>Next</button>
+              </div>
+            </div>
+            <div class="inspector">
+              <div id="file-empty" class="empty-state">
+                <h2>A closer look.</h2>
+                <p>
+                  Choose a file to inspect its source and compare the available
+                  fidelity tiers.
+                </p>
+              </div>
+              <section id="file-detail" aria-labelledby="file-heading" hidden>
+                <h2 id="file-heading"></h2>
+                <p id="file-metadata"></p>
+                <div class="tier-controls">
+                  <label for="tier">View tier</label>
+                  <span class="tier-select">
+                    <select id="tier"></select>
+                    <svg
+                      viewBox="0 0 20 20"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="m6 8 4 4 4-4" />
+                    </svg>
+                  </span>
+                </div>
+                <p id="file-status" class="inspector-status" role="status"></p>
+                <p class="tier-note">
+                  Changing this view does not change the generated artifact.
+                </p>
+                <div class="code-surface">
+                  <pre
+                    id="file-content"
+                    tabindex="0"
+                    aria-labelledby="file-heading"
+                  ><code id="file-code"></code></pre>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+        <footer class="snapshot-note">
+          Read-only snapshot. Rerun the command to refresh the analysis.
+        </footer>
+        <noscript><p class="notice">
+            Enable JavaScript to load this local analysis snapshot and use the
+            playground.
+          </p></noscript>
+      </main>
+    </div>
+  </body>
+</html>

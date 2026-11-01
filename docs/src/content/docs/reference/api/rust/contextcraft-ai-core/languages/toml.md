@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::toml"
 description: "TOML table, key, and scalar-value outlines."
 editUrl: false
 sidebar:
-  order: 76
+  order: 77
   hidden: true
 ---
 

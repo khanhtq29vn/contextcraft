@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::go::dependencies"
 description: "Extract dependency references from captured syntax nodes."
 editUrl: false
 sidebar:
-  order: 29
+  order: 30
   hidden: true
 ---
 

@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::lua::manifest"
 description: "Static LuaRocks package names and declared local rock dependencies."
 editUrl: false
 sidebar:
-  order: 49
+  order: 50
   hidden: true
 ---
 

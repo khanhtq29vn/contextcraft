@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::bash"
 description: "Bash `.sh` outlines and literal `source`/`.` dependencies."
 editUrl: false
 sidebar:
-  order: 13
+  order: 14
   hidden: true
 ---
 

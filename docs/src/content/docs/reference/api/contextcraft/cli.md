@@ -3,7 +3,7 @@ title: "contextcraft.cli"
 description: "Load the optional Cyclopts and Rich command-line interface."
 editUrl: false
 sidebar:
-  order: 4
+  order: 5
   hidden: true
 ---
 

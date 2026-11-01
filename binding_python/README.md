@@ -17,6 +17,37 @@ Install only the SDK with `pip install contextcraft-ai`.
 The CLI accepts directories, not individual source files or remote URLs. It uses
 `Config` and `ContextCraft.run()`, the same API as the SDK.
 
+## Browser preview
+
+```sh
+contextcraft . --preview
+contextcraft . --preview --budget 8k --focus "authentication" --port 8765 --no-open
+```
+
+Preview mode serves a read-only snapshot at `127.0.0.1` and opens your browser.
+The default port is chosen automatically. Use `--no-open` to open the URL printed
+in the terminal yourself, and press `Ctrl+C` to stop the server.
+
+The playground shares the documentation’s typography, colors, and Light, Dark,
+and Auto themes. Hanken Grotesk, Source Serif 4, and JetBrains Mono load from
+Google Fonts. It shows the exact artifact, supports copying and downloading,
+and lets you search files and compare their fidelity tiers in a file inspector.
+Markdown artifacts render with Marked.js and DOMPurify loaded from jsDelivr.
+If either library is unavailable, the playground shows raw text automatically.
+Use Preview and Raw to switch views; copy and download preserve the original
+artifact. XML and JSON remain raw text. Code blocks and file tier source use
+Highlight.js from jsDelivr for syntax highlighting, with theme-aware colors.
+If the highlighter cannot load, code remains readable without highlighting.
+
+File metadata is paginated and source content is loaded on demand. Viewing a
+different tier does not change the artifact. There is no live watching or
+configuration editing; rerun the command to refresh.
+
+Preview mode does not print the artifact to stdout. An explicit `--output` file
+is still saved. The session URL grants access to the results; do not share it.
+The server serves only bundled assets and snapshot data, not repository paths.
+No additional dependencies beyond the CLI extra are needed.
+
 ## Python API
 
 ```python

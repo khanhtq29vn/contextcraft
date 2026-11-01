@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::css"
 description: "CSS selector/declaration outlines and literal local stylesheet imports."
 editUrl: false
 sidebar:
-  order: 22
+  order: 23
   hidden: true
 ---
 

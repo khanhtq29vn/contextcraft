@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::graph"
 description: "Directed local file dependencies and relevance scoring."
 editUrl: false
 sidebar:
-  order: 9
+  order: 10
   hidden: true
 ---
 

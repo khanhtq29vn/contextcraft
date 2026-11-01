@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::cmake"
 description: "CMake command/function/target outlines and static local file dependencies."
 editUrl: false
 sidebar:
-  order: 17
+  order: 18
   hidden: true
 ---
 

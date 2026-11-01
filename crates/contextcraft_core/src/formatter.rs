@@ -32,6 +32,8 @@ pub struct ArtifactFormatter;
 impl ArtifactFormatter {
     /// Renders one escaped file block. The path-only tier produces no block.
     ///
+    /// Markdown paths use inline code; control characters are visibly escaped.
+    ///
     /// # Examples
     ///
     /// JSON output escapes source text so the block can be parsed independently.
@@ -366,7 +368,7 @@ fn render_into(
 
             for &file in tree {
                 output.write_all(b"- ")?;
-                write_json(output, path(file))?;
+                write_markdown_path(output, path(file))?;
                 output.write_all(b"\n")?;
             }
 
@@ -455,28 +457,68 @@ fn render_file_into(
             }
         }
         OutputFormat::Markdown => {
-            let mut longest = 0;
-            let mut run = 0;
-
-            for byte in content.bytes() {
-                if byte == b'`' {
-                    run += 1;
-                    longest = longest.max(run);
-                } else {
-                    run = 0;
-                }
-            }
-
-            let fence = "`".repeat(3.max(longest + 1));
+            let fence = "`".repeat(backtick_fence_length(content, 3));
             output.write_all(b"## ")?;
-            write_json(output, path)?;
+            write_markdown_path(output, path)?;
             write!(
                 output,
-                " [{}]\n\n{fence}\n{content}\n{fence}\n\n",
+                " (**{}**)\n\n{fence}\n{content}\n{fence}\n\n",
                 level.as_str()
             )
         }
     }
+}
+
+fn backtick_fence_length(text: &str, minimum: usize) -> usize {
+    let mut longest = 0;
+    let mut run = 0;
+
+    for byte in text.bytes() {
+        if byte == b'`' {
+            run += 1;
+            longest = longest.max(run);
+        } else {
+            run = 0;
+        }
+    }
+
+    minimum.max(longest + 1)
+}
+
+fn write_markdown_path(output: &mut impl Write, path: &str) -> io::Result<()> {
+    let fence_length = backtick_fence_length(path, 1);
+    // Separate literal backticks and preserve surrounding spaces after Markdown trimming.
+    let padded = path.starts_with('`')
+        || path.ends_with('`')
+        || (path.starts_with(' ') && path.ends_with(' ') && path.bytes().any(|byte| byte != b' '));
+
+    for _ in 0..fence_length {
+        output.write_all(b"`")?;
+    }
+    if padded {
+        output.write_all(b" ")?;
+    }
+
+    let mut start = 0;
+
+    for (offset, character) in path.char_indices() {
+        if character.is_control() {
+            output.write_all(&path.as_bytes()[start..offset])?;
+            write!(output, "{}", character.escape_debug())?;
+            start = offset + character.len_utf8();
+        }
+    }
+
+    output.write_all(&path.as_bytes()[start..])?;
+
+    if padded {
+        output.write_all(b" ")?;
+    }
+    for _ in 0..fence_length {
+        output.write_all(b"`")?;
+    }
+
+    Ok(())
 }
 
 fn write_json(output: &mut impl Write, text: &str) -> io::Result<()> {

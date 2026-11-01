@@ -3,7 +3,7 @@ title: "contextcraft-ai"
 description: "Python bindings for AST-aware, personalized-PageRank-ranked, token-budgeted codebase compression for LLMs."
 editUrl: false
 sidebar:
-  order: 5
+  order: 6
   hidden: true
 ---
 

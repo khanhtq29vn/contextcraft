@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages"
 description: "Language grammars, outline capture queries, and local dependency resolution."
 editUrl: false
 sidebar:
-  order: 12
+  order: 13
   hidden: true
 ---
 

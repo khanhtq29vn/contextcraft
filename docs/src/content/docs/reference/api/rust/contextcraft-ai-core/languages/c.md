@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::c"
 description: "C parsing and local include resolution with static compilation-database paths."
 editUrl: false
 sidebar:
-  order: 14
+  order: 15
   hidden: true
 ---
 

@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::rust::resolve"
 description: "Resolve captured references to indexed local files."
 editUrl: false
 sidebar:
-  order: 67
+  order: 68
   hidden: true
 ---
 

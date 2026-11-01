@@ -60,8 +60,9 @@ INPUT_GROUP = Group("Input", sort_key=0)
 OUTPUT_GROUP = Group("Output", sort_key=1)
 FOCUS_GROUP = Group("Focus", sort_key=2)
 TOKEN_GROUP = Group("Token accounting", sort_key=3)
-DIAGNOSTICS_GROUP = Group("Diagnostics", sort_key=4)
-GENERAL_GROUP = Group("General", sort_key=5)
+PREVIEW_GROUP = Group("Preview", sort_key=4)
+DIAGNOSTICS_GROUP = Group("Diagnostics", sort_key=5)
+GENERAL_GROUP = Group("General", sort_key=6)
 
 stderr = Console(stderr=True, markup=False, highlight=False)
 app = App(
@@ -406,6 +407,30 @@ def compile_repository(
             help="Maximum source and manifest size in bytes",
         ),
     ] = _DEFAULTS.max_file_size_bytes,
+    preview: Annotated[
+        bool,
+        Parameter(
+            group=PREVIEW_GROUP,
+            help="Serve a read-only browser preview instead of printing the artifact",
+        ),
+    ] = False,
+    port: Annotated[
+        int,
+        Parameter(
+            group=PREVIEW_GROUP,
+            validator=Number(gte=0, lte=65535),
+            help="Preview port; 0 chooses an available port",
+        ),
+    ] = 0,
+    open_browser: Annotated[
+        bool,
+        Parameter(
+            group=PREVIEW_GROUP,
+            name="--open",
+            negative="--no-open",
+            help="Open the preview in a browser",
+        ),
+    ] = True,
     quiet: Annotated[
         bool,
         Parameter(
@@ -427,6 +452,8 @@ def compile_repository(
     Write context to stdout or an output file, and diagnostics to stderr.
     Markdown is rendered when stdout is a terminal. Piped and saved artifacts
     retain their original content. Existing output files may be overwritten.
+    With --preview, serve a read-only local web view until Ctrl+C instead of
+    writing to stdout. An explicit output file is still saved.
     """
     start = perf_counter()
     path = path.expanduser()
@@ -465,15 +492,20 @@ def compile_repository(
     elapsed_ms = (perf_counter() - start) * 1000
     if debug:
         _render_debug(analysis, config)
-    _write_output(
-        analysis.artifact.content,
-        output,
-        render_markdown=config.output_format == OutputFormat.MARKDOWN,
-    )
-    if not quiet:
+    if not preview or output is not None:
+        _write_output(
+            analysis.artifact.content,
+            output,
+            render_markdown=config.output_format == OutputFormat.MARKDOWN,
+        )
+    if not quiet and not preview:
         _render_summary(analysis, config, elapsed_ms, output)
     if analysis.artifact.token_counts_estimated:
         stderr.print(
             "warning: token counts are estimated. A strict budget fit is not guaranteed",
             style="yellow",
         )
+    if preview:
+        from ._preview import serve_preview
+
+        serve_preview(analysis, config, port=port, open_browser=open_browser)

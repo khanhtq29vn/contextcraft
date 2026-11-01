@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::svelte"
 description: "Svelte component markup, embedded script/style outlines, and local imports."
 editUrl: false
 sidebar:
-  order: 72
+  order: 73
   hidden: true
 ---
 

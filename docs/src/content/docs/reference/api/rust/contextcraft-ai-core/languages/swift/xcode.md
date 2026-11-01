@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::swift::xcode"
 description: "Static Xcode source membership, target dependencies, and workspace references."
 editUrl: false
 sidebar:
-  order: 75
+  order: 76
   hidden: true
 ---
 

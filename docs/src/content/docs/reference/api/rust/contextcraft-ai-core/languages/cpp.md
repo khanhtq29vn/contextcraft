@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::cpp"
 description: "C++ parsing with shared C include resolution."
 editUrl: false
 sidebar:
-  order: 19
+  order: 20
   hidden: true
 ---
 

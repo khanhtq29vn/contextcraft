@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::elixir"
 description: "Elixir outlines, literal Mix dependencies, and local module references."
 editUrl: false
 sidebar:
-  order: 25
+  order: 26
   hidden: true
 ---
 

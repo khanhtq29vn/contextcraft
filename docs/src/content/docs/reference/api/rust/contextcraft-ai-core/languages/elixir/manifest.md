@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::elixir::manifest"
 description: "Literal Mix application names, path dependencies, and umbrella membership."
 editUrl: false
 sidebar:
-  order: 27
+  order: 28
   hidden: true
 ---
 

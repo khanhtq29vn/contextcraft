@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::lua"
 description: "Lua outlines, LuaRocks metadata, and static local module dependencies."
 editUrl: false
 sidebar:
-  order: 48
+  order: 49
   hidden: true
 ---
 

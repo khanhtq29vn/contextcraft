@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::repo"
 description: "Read, redact, and analyze repository source files."
 editUrl: false
 sidebar:
-  order: 83
+  order: 84
   hidden: true
 ---
 

@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::php"
 description: "PHP declarations, namespace imports, literal includes, and Composer autoload roots."
 editUrl: false
 sidebar:
-  order: 52
+  order: 53
   hidden: true
 ---
 

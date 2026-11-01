@@ -3,7 +3,7 @@ title: "contextcraft-ai-core"
 description: "AST-aware, personalized-PageRank-ranked, token-budgeted codebase compression for LLMs."
 editUrl: false
 sidebar:
-  order: 6
+  order: 7
   hidden: true
 ---
 
