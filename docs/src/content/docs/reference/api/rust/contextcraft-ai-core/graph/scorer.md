@@ -58,10 +58,11 @@ filename, or if a dependency of an indexed file is outside the index.
             return ArenaMap::new();
         }
 
-        let terms: Vec<_> = tokenize(config.focus_query.as_deref().unwrap_or(""))
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
+        let mut terms = BTreeSet::new();
+        for_each_token(config.focus_query.as_deref().unwrap_or(""), |token| {
+            terms.insert(token.to_owned());
+        });
+        let terms: Vec<_> = terms.into_iter().collect();
         let lexical = Self::bm25_scores(index, repository, &terms);
         let patterns: Vec<_> = config
             .focus_files

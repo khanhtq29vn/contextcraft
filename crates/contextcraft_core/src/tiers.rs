@@ -68,8 +68,8 @@ pub struct RenderedTier {
 
 impl RenderedTier {
     fn new(content: Arc<str>, path: &str, level: FidelityLevel, format: OutputFormat) -> Self {
-        let block = ArtifactFormatter::render_file(path, &content, level, format);
-        let bytes = block.len() + usize::from(format == OutputFormat::Json);
+        let bytes = ArtifactFormatter::file_bytes(path, &content, level, format)
+            + usize::from(format == OutputFormat::Json);
 
         Self {
             content,
@@ -168,7 +168,9 @@ impl TierRenderer {
     /// Renders tiers, using a placeholder when a supported language has no outline.
     /// Unsupported files retain the richer-source fallback.
     ///
-    /// Files without readable source receive only a path-only tier.
+    /// Files without readable source receive only a path-only tier. Initial cost
+    /// estimates use escaped, framed byte lengths; exact token costs are cached
+    /// later when the allocator or formatter needs them.
     ///
     /// # Errors
     ///

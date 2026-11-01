@@ -89,47 +89,10 @@ assert_eq!(file["content"], "fn main() { println!(\"hello\"); }\n");
             return String::new();
         }
 
-        match format {
-            OutputFormat::Json => format!(
-                "{{\"path\":{},\"tier\":\"{}\",\"content\":{}}}",
-                json_string(path),
-                level.as_str(),
-                json_string(content),
-            ),
-            OutputFormat::Xml => {
-                let path = escape_xml(path, true);
-
-                if content.is_empty() {
-                    format!("<file path=\"{path}\" tier=\"{}\" />", level.as_str())
-                } else {
-                    format!(
-                        "<file path=\"{path}\" tier=\"{}\">{}</file>",
-                        level.as_str(),
-                        escape_xml(content, false)
-                    )
-                }
-            }
-            OutputFormat::Markdown => {
-                let mut longest = 0;
-                let mut run = 0;
-
-                for byte in content.bytes() {
-                    if byte == b'`' {
-                        run += 1;
-                        longest = longest.max(run);
-                    } else {
-                        run = 0;
-                    }
-                }
-
-                let fence = "`".repeat(3.max(longest + 1));
-                format!(
-                    "## {} [{}]\n\n{fence}\n{content}\n{fence}\n\n",
-                    json_string(path),
-                    level.as_str()
-                )
-            }
-        }
+        let mut output = String::with_capacity(content.len() + path.len() + 64);
+        render_file_into(&mut output, path, content, level, format)
+            .expect("writing to a String cannot fail");
+        output
     }
 ```
 
@@ -254,12 +217,14 @@ paths that do not belong to the index.
                 .as_ref()
                 .unwrap()
                 .content;
-            blocks.push_str(&Self::render_file(
+            render_file_into(
+                &mut blocks,
                 path(file),
                 content,
                 level,
                 config.output_format,
-            ));
+            )
+            .expect("writing to a String cannot fail");
         }
 
         let omitted = index.files.len() - tree.len();
@@ -280,7 +245,8 @@ paths that do not belong to the index.
 
                     for &file in tree {
                         listing.push_str("<file path=\"");
-                        listing.push_str(&escape_xml(path(file), true));
+                        write_xml(&mut listing, path(file), true)
+                            .expect("writing to a String cannot fail");
                         listing.push_str("\" />");
                     }
 

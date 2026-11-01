@@ -1,7 +1,7 @@
 //! Render escaped Markdown, XML, or JSON and enforce the final token budget.
 
-use std::borrow::Cow;
 use std::collections::HashSet;
+use std::fmt::{self, Write};
 
 use la_arena::ArenaMap;
 
@@ -62,47 +62,22 @@ impl ArtifactFormatter {
             return String::new();
         }
 
-        match format {
-            OutputFormat::Json => format!(
-                "{{\"path\":{},\"tier\":\"{}\",\"content\":{}}}",
-                json_string(path),
-                level.as_str(),
-                json_string(content),
-            ),
-            OutputFormat::Xml => {
-                let path = escape_xml(path, true);
+        let mut output = String::with_capacity(content.len() + path.len() + 64);
+        render_file_into(&mut output, path, content, level, format)
+            .expect("writing to a String cannot fail");
+        output
+    }
 
-                if content.is_empty() {
-                    format!("<file path=\"{path}\" tier=\"{}\" />", level.as_str())
-                } else {
-                    format!(
-                        "<file path=\"{path}\" tier=\"{}\">{}</file>",
-                        level.as_str(),
-                        escape_xml(content, false)
-                    )
-                }
-            }
-            OutputFormat::Markdown => {
-                let mut longest = 0;
-                let mut run = 0;
-
-                for byte in content.bytes() {
-                    if byte == b'`' {
-                        run += 1;
-                        longest = longest.max(run);
-                    } else {
-                        run = 0;
-                    }
-                }
-
-                let fence = "`".repeat(3.max(longest + 1));
-                format!(
-                    "## {} [{}]\n\n{fence}\n{content}\n{fence}\n\n",
-                    json_string(path),
-                    level.as_str()
-                )
-            }
-        }
+    pub(crate) fn file_bytes(
+        path: &str,
+        content: &str,
+        level: FidelityLevel,
+        format: OutputFormat,
+    ) -> usize {
+        let mut counter = ByteCounter(0);
+        render_file_into(&mut counter, path, content, level, format)
+            .expect("counting bytes cannot fail");
+        counter.0
     }
 
     /// Counts a framed file block, including a trailing comma for JSON.
@@ -183,12 +158,14 @@ impl ArtifactFormatter {
                 .as_ref()
                 .unwrap()
                 .content;
-            blocks.push_str(&Self::render_file(
+            render_file_into(
+                &mut blocks,
                 path(file),
                 content,
                 level,
                 config.output_format,
-            ));
+            )
+            .expect("writing to a String cannot fail");
         }
 
         let omitted = index.files.len() - tree.len();
@@ -209,7 +186,8 @@ impl ArtifactFormatter {
 
                     for &file in tree {
                         listing.push_str("<file path=\"");
-                        listing.push_str(&escape_xml(path(file), true));
+                        write_xml(&mut listing, path(file), true)
+                            .expect("writing to a String cannot fail");
                         listing.push_str("\" />");
                     }
 
@@ -398,12 +376,77 @@ impl ArtifactFormatter {
     }
 }
 
+// Share framing with rendering without collecting the complete file block.
+struct ByteCounter(usize);
+
+impl Write for ByteCounter {
+    fn write_str(&mut self, text: &str) -> fmt::Result {
+        self.0 += text.len();
+        Ok(())
+    }
+}
+
+fn render_file_into(
+    output: &mut impl Write,
+    path: &str,
+    content: &str,
+    level: FidelityLevel,
+    format: OutputFormat,
+) -> fmt::Result {
+    if level == FidelityLevel::Tree {
+        return Ok(());
+    }
+
+    match format {
+        OutputFormat::Json => write!(
+            output,
+            "{{\"path\":{},\"tier\":\"{}\",\"content\":{}}}",
+            json_string(path),
+            level.as_str(),
+            json_string(content),
+        ),
+        OutputFormat::Xml => {
+            output.write_str("<file path=\"")?;
+            write_xml(output, path, true)?;
+            write!(output, "\" tier=\"{}\"", level.as_str())?;
+
+            if content.is_empty() {
+                output.write_str(" />")
+            } else {
+                output.write_char('>')?;
+                write_xml(output, content, false)?;
+                output.write_str("</file>")
+            }
+        }
+        OutputFormat::Markdown => {
+            let mut longest = 0;
+            let mut run = 0;
+
+            for byte in content.bytes() {
+                if byte == b'`' {
+                    run += 1;
+                    longest = longest.max(run);
+                } else {
+                    run = 0;
+                }
+            }
+
+            let fence = "`".repeat(3.max(longest + 1));
+            write!(
+                output,
+                "## {} [{}]\n\n{fence}\n{content}\n{fence}\n\n",
+                json_string(path),
+                level.as_str()
+            )
+        }
+    }
+}
+
 fn json_string(text: &str) -> String {
     serde_json::to_string(text).expect("strings serialize as JSON")
 }
 
-fn escape_xml(text: &str, attribute: bool) -> Cow<'_, str> {
-    let mut escaped = String::new();
+fn write_xml(output: &mut impl Write, text: &str, attribute: bool) -> fmt::Result {
     let mut start = 0;
 
     for (offset, character) in text.char_indices() {
@@ -425,19 +468,10 @@ fn escape_xml(text: &str, attribute: bool) -> Cow<'_, str> {
             _ => continue,
         };
 
-        if start == 0 {
-            escaped.reserve(text.len());
-        }
-
-        escaped.push_str(&text[start..offset]);
-        escaped.push_str(replacement);
+        output.write_str(&text[start..offset])?;
+        output.write_str(replacement)?;
         start = offset + character.len_utf8();
     }
 
-    if start == 0 {
-        Cow::Borrowed(text)
-    } else {
-        escaped.push_str(&text[start..]);
-        Cow::Owned(escaped)
-    }
+    output.write_str(&text[start..])
 }

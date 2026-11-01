@@ -112,7 +112,9 @@ fn render(
 
 Renders tiers, using a placeholder when a supported language has no outline. Unsupported files retain the richer-source fallback.
 
-Files without readable source receive only a path-only tier.
+Files without readable source receive only a path-only tier. Initial cost
+estimates use escaped, framed byte lengths; exact token costs are cached
+later when the allocator or formatter needs them.
 
 **Errors:**
 

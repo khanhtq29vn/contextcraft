@@ -44,10 +44,11 @@ impl GraphScorer {
             return ArenaMap::new();
         }
 
-        let terms: Vec<_> = tokenize(config.focus_query.as_deref().unwrap_or(""))
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
+        let mut terms = BTreeSet::new();
+        for_each_token(config.focus_query.as_deref().unwrap_or(""), |token| {
+            terms.insert(token.to_owned());
+        });
+        let terms: Vec<_> = terms.into_iter().collect();
         let lexical = Self::bm25_scores(index, repository, &terms);
         let patterns: Vec<_> = config
             .focus_files
@@ -291,13 +292,13 @@ struct Document {
 
 impl Document {
     fn count(&mut self, field: usize, text: &str, terms: &HashMap<&str, usize>) {
-        for token in tokenize(text) {
+        for_each_token(text, |token| {
             self.lengths[field] += 1;
 
-            if let Some(&term) = terms.get(token.as_str()) {
+            if let Some(&term) = terms.get(token) {
                 self.frequencies.entry(term).or_default()[field] += 1;
             }
-        }
+        });
     }
 
     fn count_ranges(
@@ -333,18 +334,29 @@ impl Document {
     }
 }
 
-fn tokenize(text: &str) -> impl Iterator<Item = String> + '_ {
-    WORD.find_iter(text).flat_map(|matched| {
+fn for_each_token(text: &str, mut emit: impl FnMut(&str)) {
+    for matched in WORD.find_iter(text) {
         let word = matched.as_str();
+        let lowercase = word.to_lowercase();
+        emit(&lowercase);
+
         let split = ACRONYM.replace_all(word, "${1}_${2}");
         let split = CAMEL.replace_all(&split, "${1}_${2}").to_lowercase();
-        let mut tokens = HashSet::from([word.to_lowercase()]);
-        tokens.extend(
-            split
-                .split('_')
-                .filter(|part| part.chars().count() >= 2)
-                .map(str::to_owned),
-        );
-        tokens.into_iter()
-    })
+
+        if !split.contains('_') {
+            continue;
+        }
+
+        // Repeated identifier parts count once per word, alongside the whole word.
+        let mut parts = HashSet::new();
+
+        for part in split
+            .split('_')
+            .filter(|part| part.chars().nth(1).is_some())
+        {
+            if part != lowercase && parts.insert(part) {
+                emit(part);
+            }
+        }
+    }
 }
