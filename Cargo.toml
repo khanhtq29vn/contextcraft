@@ -3,7 +3,7 @@ resolver = "3"
 members = ["binding_python", "crates/*"]
 
 [workspace.package]
-version = "0.3.2"
+version = "0.4.0"
 edition = "2024"
 description = "AST-Aware, Personalized-PageRank-Ranked, Token-Budgeted Codebase Compressor for LLMs"
 license = "MIT"

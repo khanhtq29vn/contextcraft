@@ -69,7 +69,7 @@ checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
 name = "contextcraft-ai"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "contextcraft-ai-core",
  "pyo3",
@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "contextcraft-ai-core"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "apple-plist",
  "globset",
