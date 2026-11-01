@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::tiers"
 description: "Render reusable fidelity tiers and lazily cache their framed token costs."
 editUrl: false
 sidebar:
-  order: 76
+  order: 77
   hidden: true
 ---
 

@@ -27,6 +27,10 @@ impl Language for Ruby {
         "ruby"
     }
 
+    fn interpreters(&self) -> &'static [&'static str] {
+        &["ruby"]
+    }
+
     fn grammar(&self) -> ts::Language {
         tree_sitter_ruby::LANGUAGE.into()
     }
@@ -69,10 +73,6 @@ impl Language for Ruby {
 
     fn package_markers(&self) -> &'static [&'static str] {
         &["Gemfile"]
-    }
-
-    fn package_metadata_files(&self) -> &'static [&'static str] {
-        &[]
     }
 
     fn file_extensions(&self) -> &'static [&'static str] {

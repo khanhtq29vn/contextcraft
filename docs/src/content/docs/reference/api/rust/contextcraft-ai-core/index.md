@@ -27,7 +27,7 @@ One repository file and its package and language assignments.
 |------|------|-------------|
 | `path` | `PathBuf` | File path relative to `Index::root`. |
 | `package_id` | `PackageId` | Owning package, or the index's fallback package when none is detected. |
-| `language` | `Option<&'static str>` | Registered language ID, or `None` for an unsupported filename or extension. |
+| `language` | `Option<&'static str>` | Registered language ID, or `None` when no supported language is detected. |
 
 ### <span id="struct.Index"></span><code style="font-size: 0.85em">struct Index</code>
 
@@ -167,31 +167,18 @@ exclusion is invalid, or package metadata cannot be read or parsed.
 
         let mut files = Arena::with_capacity(paths.len());
 
-        for path in paths {
-            let language = languages
-                .iter()
-                .find(|language| {
-                    path.file_name()
-                        .and_then(|name| name.to_str())
-                        .is_some_and(|name| language.matches_filename(name))
-                })
-                .or_else(|| {
-                    languages.iter().find(|language| {
-                        language.file_extensions().iter().any(|extension| {
-                            path.extension()
-                                .is_some_and(|suffix| suffix == extension.trim_start_matches('.'))
-                        })
-                    })
-                })
-                .map(|language| language.id());
+        let detector = LanguageDetector::new(&languages);
 
-            let language = if language == Some("c")
-                && path.extension().is_some_and(|extension| extension == "h")
-            {
-                header_language(&root.join(&path), config).or(language)
-            } else {
-                language
-            };
+        for path in paths {
+            let language = detector.detect(&path, || {
+                let mut bytes = Vec::new();
+                std::fs::File::open(root.join(&path))
+                    .ok()?
+                    .take((config.max_file_size_bytes.get() as u64).saturating_add(1))
+                    .read_to_end(&mut bytes)
+                    .ok()?;
+                (bytes.len() <= config.max_file_size_bytes.get()).then_some(bytes)
+            });
 
             files.alloc(File {
                 path,

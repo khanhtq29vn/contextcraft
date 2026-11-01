@@ -29,6 +29,10 @@ impl Language for Swift {
         "swift"
     }
 
+    fn interpreters(&self) -> &'static [&'static str] {
+        &["swift"]
+    }
+
     fn grammar(&self) -> ts::Language {
         tree_sitter_swift::LANGUAGE.into()
     }

@@ -4,10 +4,6 @@ use tree_sitter as ts;
 
 use super::javascript::{JavaScript, JavaScriptAnalysis};
 use super::{Language, LanguageAnalysis};
-use crate::Config;
-use crate::error::Error;
-use crate::index::Index;
-use crate::package::PackageResolution;
 
 /// TypeScript grammar configuration. Defaults to TypeScript without JSX.
 #[derive(Debug, Default)]
@@ -61,20 +57,8 @@ impl Language for TypeScript {
         Box::new(JavaScriptAnalysis::default())
     }
 
-    fn resolve_packages(
-        &mut self,
-        _index: &Index,
-        _config: &Config,
-    ) -> Result<PackageResolution, Error> {
-        Ok(PackageResolution::default())
-    }
-
     fn ignore_patterns(&self) -> &'static [&'static str] {
         JavaScript.ignore_patterns()
-    }
-
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
     }
 
     fn package_metadata_files(&self) -> &'static [&'static str] {

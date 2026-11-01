@@ -6,11 +6,8 @@
 use tree_sitter as ts;
 
 use super::{Language, LanguageAnalysis, local, render_outline};
-use crate::Config;
-use crate::error::Error;
 use crate::index::FileId;
 use crate::index::Index;
-use crate::package::PackageResolution;
 use crate::repo::{Analysis, Repository};
 use la_arena::ArenaMap;
 use local::{References, text};
@@ -22,6 +19,10 @@ pub struct Bash;
 impl Language for Bash {
     fn id(&self) -> &'static str {
         "bash"
+    }
+
+    fn interpreters(&self) -> &'static [&'static str] {
+        &["sh", "bash"]
     }
 
     fn grammar(&self) -> ts::Language {
@@ -42,26 +43,6 @@ impl Language for Bash {
 
     fn render_skel(&self, source: &str, analysis: &Analysis) -> String {
         render_outline(source, analysis, true)
-    }
-
-    fn resolve_packages(
-        &mut self,
-        _index: &Index,
-        _config: &Config,
-    ) -> Result<PackageResolution, Error> {
-        Ok(PackageResolution::default())
-    }
-
-    fn ignore_patterns(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_metadata_files(&self) -> &'static [&'static str] {
-        &[]
     }
 
     fn file_extensions(&self) -> &'static [&'static str] {

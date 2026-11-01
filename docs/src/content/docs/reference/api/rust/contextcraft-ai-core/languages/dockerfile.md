@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::dockerfile"
 description: "Containerfile/Dockerfile outlines using `tree-sitter-containerfile`."
 editUrl: false
 sidebar:
-  order: 23
+  order: 24
   hidden: true
 ---
 

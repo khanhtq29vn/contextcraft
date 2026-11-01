@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::go::resolve"
 description: "Resolve captured references to indexed local files."
 editUrl: false
 sidebar:
-  order: 30
+  order: 31
   hidden: true
 ---
 

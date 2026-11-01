@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::kotlin::dependencies"
 description: "Kotlin package-qualified declarations and explicit imports."
 editUrl: false
 sidebar:
-  order: 41
+  order: 42
   hidden: true
 ---
 

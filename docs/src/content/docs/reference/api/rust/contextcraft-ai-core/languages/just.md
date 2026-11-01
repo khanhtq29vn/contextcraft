@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::just"
 description: "Just outlines, explicit imports/modules, and named recipe dependencies."
 editUrl: false
 sidebar:
-  order: 39
+  order: 40
   hidden: true
 ---
 

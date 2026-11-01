@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::rust::dependencies"
 description: "Extract dependency references from captured syntax nodes."
 editUrl: false
 sidebar:
-  order: 57
+  order: 58
   hidden: true
 ---
 

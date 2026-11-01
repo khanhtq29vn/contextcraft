@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::html"
 description: "HTML structure, embedded JavaScript/CSS outlines, and literal local asset dependencies."
 editUrl: false
 sidebar:
-  order: 33
+  order: 34
   hidden: true
 ---
 

@@ -1,6 +1,7 @@
 //! Discover files, package ownership, and local workspace relationships.
 
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
@@ -11,10 +12,10 @@ use crate::Config;
 use crate::error::Error;
 use crate::languages::{
     Language, bash::Bash, c::C, cmake::CMake, cpp::Cpp, csharp::CSharp, css::Css,
-    dockerfile::Dockerfile, elixir::Elixir, go::Go, graphql::Graphql, hcl::Hcl, html::Html,
-    javascript::JavaScript, json::Json, just::Just, kotlin::Kotlin, lua::Lua, make::Make,
-    markdown::Markdown, protobuf::Protobuf, python::Python, rst::Rst, ruby::Ruby, rust::Rust,
-    scala::Scala, scss::Scss, sql::Sql, svelte::Svelte, swift::Swift, toml::Toml,
+    detect::LanguageDetector, dockerfile::Dockerfile, elixir::Elixir, go::Go, graphql::Graphql,
+    hcl::Hcl, html::Html, javascript::JavaScript, json::Json, just::Just, kotlin::Kotlin, lua::Lua,
+    make::Make, markdown::Markdown, protobuf::Protobuf, python::Python, rst::Rst, ruby::Ruby,
+    rust::Rust, scala::Scala, scss::Scss, sql::Sql, svelte::Svelte, swift::Swift, toml::Toml,
     typescript::TypeScript, vue::Vue, yaml::Yaml, zig::Zig,
 };
 use crate::package::{Package, Workspace};
@@ -31,7 +32,7 @@ pub struct File {
     pub path: PathBuf,
     /// Owning package, or the index's fallback package when none is detected.
     pub package_id: PackageId,
-    /// Registered language ID, or `None` for an unsupported filename or extension.
+    /// Registered language ID, or `None` when no supported language is detected.
     pub language: Option<&'static str>,
 }
 
@@ -177,31 +178,18 @@ impl Indexer {
 
         let mut files = Arena::with_capacity(paths.len());
 
-        for path in paths {
-            let language = languages
-                .iter()
-                .find(|language| {
-                    path.file_name()
-                        .and_then(|name| name.to_str())
-                        .is_some_and(|name| language.matches_filename(name))
-                })
-                .or_else(|| {
-                    languages.iter().find(|language| {
-                        language.file_extensions().iter().any(|extension| {
-                            path.extension()
-                                .is_some_and(|suffix| suffix == extension.trim_start_matches('.'))
-                        })
-                    })
-                })
-                .map(|language| language.id());
+        let detector = LanguageDetector::new(&languages);
 
-            let language = if language == Some("c")
-                && path.extension().is_some_and(|extension| extension == "h")
-            {
-                header_language(&root.join(&path), config).or(language)
-            } else {
-                language
-            };
+        for path in paths {
+            let language = detector.detect(&path, || {
+                let mut bytes = Vec::new();
+                std::fs::File::open(root.join(&path))
+                    .ok()?
+                    .take((config.max_file_size_bytes.get() as u64).saturating_add(1))
+                    .read_to_end(&mut bytes)
+                    .ok()?;
+                (bytes.len() <= config.max_file_size_bytes.get()).then_some(bytes)
+            });
 
             files.alloc(File {
                 path,
@@ -252,50 +240,6 @@ impl Indexer {
 
         Ok(index)
     }
-}
-
-fn header_language(path: &Path, config: &Config) -> Option<&'static str> {
-    use std::io::Read;
-
-    let mut bytes = Vec::new();
-    std::fs::File::open(path)
-        .ok()?
-        .take((config.max_file_size_bytes.get() as u64).saturating_add(1))
-        .read_to_end(&mut bytes)
-        .ok()?;
-    if bytes.len() > config.max_file_size_bytes.get() {
-        return None;
-    }
-
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&C.grammar()).ok()?;
-    let c_valid = !parser.parse(&bytes, None)?.root_node().has_error();
-    parser.set_language(&Cpp.grammar()).ok()?;
-    let tree = parser.parse(&bytes, None)?;
-    if tree.root_node().has_error() {
-        return c_valid.then_some("c");
-    }
-
-    let mut pending = vec![tree.root_node()];
-    while let Some(node) = pending.pop() {
-        if matches!(
-            node.kind(),
-            "class_specifier"
-                | "namespace_definition"
-                | "template_declaration"
-                | "using_declaration"
-                | "alias_declaration"
-                | "access_specifier"
-                | "qualified_identifier"
-                | "reference_declarator"
-                | "abstract_reference_declarator"
-        ) {
-            return Some("cpp");
-        }
-        let mut cursor = node.walk();
-        pending.extend(node.named_children(&mut cursor));
-    }
-    Some(if c_valid { "c" } else { "cpp" })
 }
 
 fn scan_files(
@@ -353,22 +297,15 @@ fn scan_files(
         }
     }
 
-    let dotnet_outputs: HashSet<_> = paths
+    let ignored_directories: HashSet<_> = languages
         .iter()
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "csproj")
-        })
-        .flat_map(|path| {
-            let root = path.parent().unwrap();
-            [root.join("bin"), root.join("obj")]
-        })
+        .flat_map(|language| language.ignored_directories(&paths))
         .collect();
-    if !dotnet_outputs.is_empty() {
+    if !ignored_directories.is_empty() {
         paths.retain(|path| {
             !path
                 .ancestors()
-                .any(|parent| dotnet_outputs.contains(parent))
+                .any(|parent| ignored_directories.contains(parent))
         });
     }
     paths.sort();

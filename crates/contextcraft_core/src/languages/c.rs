@@ -6,10 +6,7 @@ use la_arena::ArenaMap;
 use tree_sitter as ts;
 
 use super::{Language, LanguageAnalysis};
-use crate::Config;
-use crate::error::Error;
 use crate::index::{FileId, Index};
-use crate::package::PackageResolution;
 use crate::repo::Repository;
 
 pub mod dependencies;
@@ -36,14 +33,6 @@ impl Language for C {
         Box::new(CAnalysis::default())
     }
 
-    fn resolve_packages(
-        &mut self,
-        _index: &Index,
-        _config: &Config,
-    ) -> Result<PackageResolution, Error> {
-        Ok(PackageResolution::default())
-    }
-
     fn ignore_patterns(&self) -> &'static [&'static str] {
         &[
             "!**/*.o",
@@ -56,10 +45,6 @@ impl Language for C {
             "!**/*.pch",
             "!**/*.gch",
         ]
-    }
-
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
     }
 
     fn package_metadata_files(&self) -> &'static [&'static str] {

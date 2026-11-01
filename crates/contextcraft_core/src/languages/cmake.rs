@@ -11,10 +11,7 @@ use tree_sitter as ts;
 
 use super::local::{self, References, text};
 use super::{Language, LanguageAnalysis, render_outline};
-use crate::Config;
-use crate::error::Error;
 use crate::index::{FileId, Index};
-use crate::package::PackageResolution;
 use crate::repo::Analysis;
 use crate::repo::Repository;
 use la_arena::ArenaMap;
@@ -46,26 +43,6 @@ impl Language for CMake {
 
     fn render_skel(&self, source: &str, analysis: &Analysis) -> String {
         render_outline(source, analysis, true)
-    }
-
-    fn resolve_packages(
-        &mut self,
-        _index: &Index,
-        _config: &Config,
-    ) -> Result<PackageResolution, Error> {
-        Ok(PackageResolution::default())
-    }
-
-    fn ignore_patterns(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_metadata_files(&self) -> &'static [&'static str] {
-        &[]
     }
 
     fn matches_filename(&self, name: &str) -> bool {

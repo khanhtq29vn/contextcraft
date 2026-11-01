@@ -102,14 +102,6 @@ impl Language for Dockerfile {
         Ok(PackageResolution::default())
     }
 
-    fn ignore_patterns(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
-    }
-
     fn package_metadata_files(&self) -> &'static [&'static str] {
         &[".dockerignore"]
     }

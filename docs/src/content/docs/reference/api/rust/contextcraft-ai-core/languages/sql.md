@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::sql"
 description: "PostgreSQL 18 schema and routine outlines using tree-sitter-postgres."
 editUrl: false
 sidebar:
-  order: 63
+  order: 64
   hidden: true
 ---
 

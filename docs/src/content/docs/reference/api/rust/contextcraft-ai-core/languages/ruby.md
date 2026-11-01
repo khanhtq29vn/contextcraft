@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::ruby"
 description: "Ruby `.rb` outlines, local Bundler gems, and literal load dependencies."
 editUrl: false
 sidebar:
-  order: 54
+  order: 55
   hidden: true
 ---
 

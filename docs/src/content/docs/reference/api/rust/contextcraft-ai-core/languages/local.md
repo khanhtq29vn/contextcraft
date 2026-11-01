@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::local"
 description: "Shared mechanics for static, repository-local language resolution."
 editUrl: false
 sidebar:
-  order: 43
+  order: 44
   hidden: true
 ---
 

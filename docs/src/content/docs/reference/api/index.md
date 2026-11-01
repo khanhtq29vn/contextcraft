@@ -34,6 +34,7 @@ sidebar:
 - [`contextcraft-ai-core::languages::csharp`](rust/contextcraft-ai-core/languages/csharp/): C# outlines, .NET project references, and solution membership.
 - [`contextcraft-ai-core::languages::csharp::manifest`](rust/contextcraft-ai-core/languages/csharp/manifest/): .NET project references and solution membership, without evaluating MSBuild.
 - [`contextcraft-ai-core::languages::css`](rust/contextcraft-ai-core/languages/css/): CSS selector/declaration outlines and literal local stylesheet imports.
+- [`contextcraft-ai-core::languages::detect`](rust/contextcraft-ai-core/languages/detect/): Filename, extension, and content-based language detection.
 - [`contextcraft-ai-core::languages::dockerfile`](rust/contextcraft-ai-core/languages/dockerfile/): Containerfile/Dockerfile outlines using `tree-sitter-containerfile`.
 - [`contextcraft-ai-core::languages::elixir`](rust/contextcraft-ai-core/languages/elixir/): Elixir outlines, literal Mix dependencies, and local module references.
 - [`contextcraft-ai-core::languages::elixir::dependencies`](rust/contextcraft-ai-core/languages/elixir/dependencies/): Literal Elixir module declarations, lexical aliases, and remote module references.

@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::python::dependencies"
 description: "Extract dependency references from captured syntax nodes."
 editUrl: false
 sidebar:
-  order: 50
+  order: 51
   hidden: true
 ---
 

@@ -57,18 +57,24 @@ Nodes and byte offsets refer to `source`, after optional secret redaction.
 ```rust
 fn resolve_dependencies(
     &self,
-    index: &Index,
-    repository: &Repository,
+    _index: &Index,
+    _repository: &Repository,
 ) -> Vec<(FileId, FileId)>
 ```
 
-Returns directed `(importer, dependency)` file edges within the index.
+Returns directed `(importer, dependency)` file edges within the index. Defaults to no dependencies.
 
 <details>
 <summary>Source</summary>
 
 ```rust
-    fn resolve_dependencies(&self, index: &Index, repository: &Repository)
+    fn resolve_dependencies(
+        &self,
+        _index: &Index,
+        _repository: &Repository,
+    ) -> Vec<(FileId, FileId)> {
+        Vec::new()
+    }
 ```
 
 </details>
@@ -114,6 +120,44 @@ Dialects with different grammars can share project ownership.
 ```rust
     fn package_language(&self) -> &'static str {
         self.id()
+    }
+```
+
+</details>
+
+##### <span id="Language.interpreters"></span><code>interpreters</code>
+
+```rust
+fn interpreters(&self) -> &'static [&'static str]
+```
+
+Returns interpreter names recognized in extensionless script shebangs.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn interpreters(&self) -> &'static [&'static str] {
+        &[]
+    }
+```
+
+</details>
+
+##### <span id="Language.content_evidence"></span><code>content_​evidence</code>
+
+```rust
+fn content_evidence(&self, _source: &[u8]) -> detect::Evidence
+```
+
+Supplies content evidence when several languages match a filename or extension.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn content_evidence(&self, _source: &[u8]) -> detect::Evidence {
+        detect::Evidence::Unknown
     }
 ```
 
@@ -182,13 +226,15 @@ Returns an error if the query is invalid for the grammar.
 fn create_analysis(&self) -> Box<dyn LanguageAnalysis>
 ```
 
-Creates repository-local dependency state shared by parallel file analysis.
+Creates repository-local dependency state shared by parallel file analysis. Defaults to stateless analysis without dependencies.
 
 <details>
 <summary>Source</summary>
 
 ```rust
-    fn create_analysis(&self) -> Box<dyn LanguageAnalysis>;
+    fn create_analysis(&self) -> Box<dyn LanguageAnalysis> {
+        Box::new(())
+    }
 ```
 
 </details>
@@ -484,12 +530,12 @@ Returns an error if inspecting a candidate manifest fails.
 ```rust
 fn resolve_packages(
     &mut self,
-    index: &Index,
-    config: &Config,
+    _index: &Index,
+    _config: &Config,
 ) -> Result<PackageResolution, Error>
 ```
 
-Resolves local packages after package IDs and file ownership are assigned.
+Resolves local packages after package IDs and file ownership are assigned. Defaults to no package updates or workspaces.
 
 **Errors:**
 
@@ -500,6 +546,12 @@ Returns an error if package metadata cannot be read or parsed.
 
 ```rust
     fn resolve_packages(
+        &mut self,
+        _index: &Index,
+        _config: &Config,
+    ) -> Result<PackageResolution, Error> {
+        Ok(PackageResolution::default())
+    }
 ```
 
 </details>
@@ -543,13 +595,36 @@ Returns an empty list when no analysis exists for this language.
 fn ignore_patterns(&self) -> &'static [&'static str]
 ```
 
-Uses `ignore::overrides` syntax: `!` prefixes exclusions.
+Uses `ignore::overrides` syntax: `!` prefixes exclusions. Defaults to no patterns.
 
 <details>
 <summary>Source</summary>
 
 ```rust
-    fn ignore_patterns(&self) -> &'static [&'static str];
+    fn ignore_patterns(&self) -> &'static [&'static str] {
+        &[]
+    }
+```
+
+</details>
+
+##### <span id="Language.ignored_directories"></span><code>ignored_​directories</code>
+
+```rust
+fn ignored_directories(&self, _paths: &[PathBuf]) -> Vec<PathBuf>
+```
+
+Returns repository-relative directories to exclude based on scanned file paths.
+
+Unlike global ignore patterns, these exclusions can be scoped to project roots.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn ignored_directories(&self, _paths: &[PathBuf]) -> Vec<PathBuf> {
+        Vec::new()
+    }
 ```
 
 </details>
@@ -560,13 +635,15 @@ Uses `ignore::overrides` syntax: `!` prefixes exclusions.
 fn package_markers(&self) -> &'static [&'static str]
 ```
 
-Returns filenames that may establish package boundaries.
+Returns filenames that may establish package boundaries. Defaults to none.
 
 <details>
 <summary>Source</summary>
 
 ```rust
-    fn package_markers(&self) -> &'static [&'static str];
+    fn package_markers(&self) -> &'static [&'static str] {
+        &[]
+    }
 ```
 
 </details>
@@ -579,13 +656,15 @@ fn package_metadata_files(&self) -> &'static [&'static str]
 
 Returns recognized package and tool metadata filenames.
 
-This metadata list does not itself control scanning exclusions.
+Defaults to none. This metadata list does not itself control scanning exclusions.
 
 <details>
 <summary>Source</summary>
 
 ```rust
-    fn package_metadata_files(&self) -> &'static [&'static str];
+    fn package_metadata_files(&self) -> &'static [&'static str] {
+        &[]
+    }
 ```
 
 </details>

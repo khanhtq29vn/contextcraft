@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::ruby::manifest"
 description: "Literal gemspec names and Bundler local path dependencies, without evaluating Ruby."
 editUrl: false
 sidebar:
-  order: 55
+  order: 56
   hidden: true
 ---
 

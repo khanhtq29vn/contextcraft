@@ -8,10 +8,8 @@
 use tree_sitter as ts;
 
 use super::{Language, LanguageAnalysis, component, javascript::JavaScript, render_outline};
-use crate::Config;
 use crate::error::Error;
-use crate::index::{FileId, Index};
-use crate::package::PackageResolution;
+use crate::index::FileId;
 use crate::repo::Analysis;
 
 /// Svelte grammar for `.svelte` single-file components.
@@ -61,20 +59,8 @@ impl Language for Svelte {
         render_outline(source, analysis, true)
     }
 
-    fn resolve_packages(
-        &mut self,
-        _index: &Index,
-        _config: &Config,
-    ) -> Result<PackageResolution, Error> {
-        Ok(PackageResolution::default())
-    }
-
     fn ignore_patterns(&self) -> &'static [&'static str] {
         JavaScript.ignore_patterns()
-    }
-
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
     }
 
     fn package_metadata_files(&self) -> &'static [&'static str] {

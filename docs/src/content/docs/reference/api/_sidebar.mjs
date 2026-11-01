@@ -71,6 +71,7 @@ export default {
                   ],
                 },
                 { label: "css", slug: "reference/api/rust/contextcraft-ai-core/languages/css" },
+                { label: "detect", slug: "reference/api/rust/contextcraft-ai-core/languages/detect" },
                 { label: "dockerfile", slug: "reference/api/rust/contextcraft-ai-core/languages/dockerfile" },
                 {
                   label: "elixir",

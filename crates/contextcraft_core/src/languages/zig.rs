@@ -13,10 +13,7 @@ use la_arena::ArenaMap;
 use tree_sitter as ts;
 
 use super::{Language, LanguageAnalysis, local, render_outline};
-use crate::Config;
-use crate::error::Error;
 use crate::index::{FileId, Index};
-use crate::package::PackageResolution;
 use crate::repo::{Analysis, Repository};
 
 /// Zig grammar for `.zig` sources, including `build.zig`.
@@ -128,14 +125,6 @@ impl Language for Zig {
 
     fn render_skel(&self, source: &str, analysis: &Analysis) -> String {
         render_outline(source, analysis, true)
-    }
-
-    fn resolve_packages(
-        &mut self,
-        _index: &Index,
-        _config: &Config,
-    ) -> Result<PackageResolution, Error> {
-        Ok(PackageResolution::default())
     }
 
     fn ignore_patterns(&self) -> &'static [&'static str] {

@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::tokens"
 description: "Count ordinary text tokens with the configured tokenizer vocabulary."
 editUrl: false
 sidebar:
-  order: 77
+  order: 78
   hidden: true
 ---
 

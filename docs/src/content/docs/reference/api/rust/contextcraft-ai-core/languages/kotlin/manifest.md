@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::kotlin::manifest"
 description: "Literal Gradle project includes, directory mappings, and project dependencies."
 editUrl: false
 sidebar:
-  order: 42
+  order: 43
   hidden: true
 ---
 

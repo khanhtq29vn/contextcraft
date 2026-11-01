@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::package"
 description: "Shared local package, dependency, and workspace metadata."
 editUrl: false
 sidebar:
-  order: 74
+  order: 75
   hidden: true
 ---
 

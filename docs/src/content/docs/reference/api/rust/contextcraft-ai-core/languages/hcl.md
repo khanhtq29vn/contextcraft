@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::hcl"
 description: "HCL outlines and Terraform directory-module dependencies."
 editUrl: false
 sidebar:
-  order: 32
+  order: 33
   hidden: true
 ---
 

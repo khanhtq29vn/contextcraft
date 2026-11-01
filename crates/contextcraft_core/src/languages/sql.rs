@@ -8,11 +8,7 @@
 
 use tree_sitter as ts;
 
-use super::{Language, LanguageAnalysis, render_outline};
-use crate::Config;
-use crate::error::Error;
-use crate::index::Index;
-use crate::package::PackageResolution;
+use super::{Language, render_outline};
 use crate::repo::Analysis;
 
 /// Sql structural outlines.
@@ -30,10 +26,6 @@ impl Language for Sql {
 
     fn source_query(&self) -> &'static str {
         include_str!("../../queries/sql.scm")
-    }
-
-    fn create_analysis(&self) -> Box<dyn LanguageAnalysis> {
-        Box::new(())
     }
 
     fn allow_partial_analysis(&self) -> bool {
@@ -57,26 +49,6 @@ impl Language for Sql {
         } else {
             outline
         }
-    }
-
-    fn resolve_packages(
-        &mut self,
-        _index: &Index,
-        _config: &Config,
-    ) -> Result<PackageResolution, Error> {
-        Ok(PackageResolution::default())
-    }
-
-    fn ignore_patterns(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_metadata_files(&self) -> &'static [&'static str] {
-        &[]
     }
 
     fn file_extensions(&self) -> &'static [&'static str] {

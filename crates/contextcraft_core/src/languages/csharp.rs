@@ -5,6 +5,8 @@
 //! contribute possible dependencies; MSBuild property expressions, imported build
 //! logic, generated code, and compiler-level type binding are not evaluated.
 
+use std::path::PathBuf;
+
 use tree_sitter as ts;
 
 pub mod manifest;
@@ -75,12 +77,18 @@ impl Language for CSharp {
         manifest::discover(index, config)
     }
 
-    fn ignore_patterns(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
+    fn ignored_directories(&self, paths: &[PathBuf]) -> Vec<PathBuf> {
+        paths
+            .iter()
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "csproj")
+            })
+            .flat_map(|path| {
+                let root = path.parent().unwrap();
+                [root.join("bin"), root.join("obj")]
+            })
+            .collect()
     }
 
     fn package_metadata_files(&self) -> &'static [&'static str] {

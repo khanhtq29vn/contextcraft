@@ -67,14 +67,6 @@ impl Language for Hcl {
         ]
     }
 
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_metadata_files(&self) -> &'static [&'static str] {
-        &[]
-    }
-
     fn file_extensions(&self) -> &'static [&'static str] {
         &[".hcl", ".tf", ".tfvars"]
     }

@@ -25,6 +25,10 @@ impl Language for JavaScript {
         "javascript"
     }
 
+    fn interpreters(&self) -> &'static [&'static str] {
+        &["node", "nodejs"]
+    }
+
     fn grammar(&self) -> ts::Language {
         tree_sitter_javascript::LANGUAGE.into()
     }

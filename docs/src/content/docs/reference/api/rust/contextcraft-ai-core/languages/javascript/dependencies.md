@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::javascript::dependencies"
 description: "Extract dependency references from captured syntax nodes."
 editUrl: false
 sidebar:
-  order: 35
+  order: 36
   hidden: true
 ---
 

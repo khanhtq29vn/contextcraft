@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::zig"
 description: "Zig declaration outlines and literal file dependencies."
 editUrl: false
 sidebar:
-  order: 72
+  order: 73
   hidden: true
 ---
 

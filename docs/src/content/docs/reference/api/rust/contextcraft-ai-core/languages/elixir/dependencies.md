@@ -3,7 +3,7 @@ title: "contextcraft-ai-core::languages::elixir::dependencies"
 description: "Literal Elixir module declarations, lexical aliases, and remote module references."
 editUrl: false
 sidebar:
-  order: 25
+  order: 26
   hidden: true
 ---
 

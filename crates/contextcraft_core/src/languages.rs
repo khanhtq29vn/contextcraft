@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::ops::Range;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use tree_sitter as ts;
 use ts::StreamingIterator;
@@ -23,6 +23,7 @@ pub mod cmake;
 pub mod cpp;
 pub mod csharp;
 pub mod css;
+pub mod detect;
 pub mod dockerfile;
 pub mod elixir;
 pub mod go;
@@ -65,11 +66,7 @@ pub trait LanguageAnalysis: Debug + Send + Sync {
     fn extract_dependencies(&self, _file: FileId, _nodes: &[ts::Node<'_>], _source: &[u8]) {}
 
     /// Returns directed `(importer, dependency)` file edges within the index.
-    fn resolve_dependencies(&self, index: &Index, repository: &Repository)
-    -> Vec<(FileId, FileId)>;
-}
-
-impl LanguageAnalysis for () {
+    /// Defaults to no dependencies.
     fn resolve_dependencies(
         &self,
         _index: &Index,
@@ -79,6 +76,8 @@ impl LanguageAnalysis for () {
     }
 }
 
+impl LanguageAnalysis for () {}
+
 /// Language-specific parsing, outline rendering, and package resolution.
 pub trait Language: Debug + Send + Sync {
     /// Returns the stable language ID used by the index and analysis maps.
@@ -87,6 +86,16 @@ pub trait Language: Debug + Send + Sync {
     /// Dialects with different grammars can share project ownership.
     fn package_language(&self) -> &'static str {
         self.id()
+    }
+
+    /// Returns interpreter names recognized in extensionless script shebangs.
+    fn interpreters(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    /// Supplies content evidence when several languages match a filename or extension.
+    fn content_evidence(&self, _source: &[u8]) -> detect::Evidence {
+        detect::Evidence::Unknown
     }
 
     /// Returns the Tree-sitter grammar used to parse source.
@@ -105,7 +114,10 @@ pub trait Language: Debug + Send + Sync {
     }
 
     /// Creates repository-local dependency state shared by parallel file analysis.
-    fn create_analysis(&self) -> Box<dyn LanguageAnalysis>;
+    /// Defaults to stateless analysis without dependencies.
+    fn create_analysis(&self) -> Box<dyn LanguageAnalysis> {
+        Box::new(())
+    }
 
     /// Allows outlines from recovered syntax trees. Defaults to `true`.
     fn allow_partial_analysis(&self) -> bool {
@@ -274,15 +286,18 @@ pub trait Language: Debug + Send + Sync {
     }
 
     /// Resolves local packages after package IDs and file ownership are assigned.
+    /// Defaults to no package updates or workspaces.
     ///
     /// # Errors
     ///
     /// Returns an error if package metadata cannot be read or parsed.
     fn resolve_packages(
         &mut self,
-        index: &Index,
-        config: &Config,
-    ) -> Result<PackageResolution, Error>;
+        _index: &Index,
+        _config: &Config,
+    ) -> Result<PackageResolution, Error> {
+        Ok(PackageResolution::default())
+    }
 
     /// Resolves local file dependencies from the repository's language state.
     ///
@@ -299,16 +314,29 @@ pub trait Language: Debug + Send + Sync {
             .unwrap_or_default()
     }
 
-    /// Uses `ignore::overrides` syntax: `!` prefixes exclusions.
-    fn ignore_patterns(&self) -> &'static [&'static str];
+    /// Uses `ignore::overrides` syntax: `!` prefixes exclusions. Defaults to no patterns.
+    fn ignore_patterns(&self) -> &'static [&'static str] {
+        &[]
+    }
 
-    /// Returns filenames that may establish package boundaries.
-    fn package_markers(&self) -> &'static [&'static str];
+    /// Returns repository-relative directories to exclude based on scanned file paths.
+    ///
+    /// Unlike global ignore patterns, these exclusions can be scoped to project roots.
+    fn ignored_directories(&self, _paths: &[PathBuf]) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    /// Returns filenames that may establish package boundaries. Defaults to none.
+    fn package_markers(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     /// Returns recognized package and tool metadata filenames.
     ///
-    /// This metadata list does not itself control scanning exclusions.
-    fn package_metadata_files(&self) -> &'static [&'static str];
+    /// Defaults to none. This metadata list does not itself control scanning exclusions.
+    fn package_metadata_files(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     /// Recognizes conventional source filenames before extension-based detection.
     fn matches_filename(&self, _name: &str) -> bool {

@@ -27,6 +27,10 @@ impl Language for Elixir {
         "elixir"
     }
 
+    fn interpreters(&self) -> &'static [&'static str] {
+        &["elixir"]
+    }
+
     fn grammar(&self) -> ts::Language {
         tree_sitter_elixir::LANGUAGE.into()
     }

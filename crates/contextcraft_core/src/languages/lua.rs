@@ -28,6 +28,10 @@ impl Language for Lua {
         "lua"
     }
 
+    fn interpreters(&self) -> &'static [&'static str] {
+        &["lua"]
+    }
+
     fn grammar(&self) -> ts::Language {
         tree_sitter_lua::LANGUAGE.into()
     }
@@ -66,14 +70,6 @@ impl Language for Lua {
 
     fn ignore_patterns(&self) -> &'static [&'static str] {
         &["!**/lua_modules/**"]
-    }
-
-    fn package_markers(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn package_metadata_files(&self) -> &'static [&'static str] {
-        &[]
     }
 
     fn file_extensions(&self) -> &'static [&'static str] {

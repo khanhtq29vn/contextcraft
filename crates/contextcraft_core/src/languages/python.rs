@@ -28,6 +28,10 @@ impl Language for Python {
         "python"
     }
 
+    fn interpreters(&self) -> &'static [&'static str] {
+        &["python", "python3"]
+    }
+
     fn grammar(&self) -> ts::Language {
         tree_sitter_python::LANGUAGE.into()
     }
