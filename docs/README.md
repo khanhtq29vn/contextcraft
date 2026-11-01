@@ -1,49 +1,17 @@
-# Starlight Starter Kit: Basics
+# ContextCraft docs
 
-[![Built with Starlight](https://astro.badg.es/v2/built-with-starlight/tiny.svg)](https://starlight.astro.build)
+Documentation site built with Astro and Starlight.
 
-```
-pnpm create astro@latest -- --template starlight
-```
+Run from the repository root:
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
-
-## 🚀 Project Structure
-
-Inside of your Astro + Starlight project, you'll see the following folders and files:
-
-```
-.
-├── public/
-├── src/
-│   ├── assets/
-│   ├── content/
-│   │   └── docs/
-│   └── content.config.ts
-├── astro.config.ts
-├── package.json
-└── tsconfig.json
+```sh
+pnpm install
+just dev-docs
 ```
 
-Starlight looks for `.md` or `.mdx` files in the `src/content/docs/` directory. Each file is exposed as a route based on its file name.
+- `just build-docs` builds the site into `docs/dist/`.
+- `just gen-docs` regenerates the API reference using Plissken.
 
-Images can be added to `src/assets/` and embedded in Markdown with a relative link.
+Edit documentation pages in `docs/src/content/docs/`. Files under `reference/api/` are generated; update their source code instead.
 
-Static assets, like favicons, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                | Action                                           |
-| :--------------------- | :----------------------------------------------- |
-| `pnpm install`         | Installs dependencies                            |
-| `pnpm dev`             | Starts local dev server at `localhost:4321`      |
-| `pnpm build`           | Build your production site to `./dist/`          |
-| `pnpm preview`         | Preview your build locally, before deploying     |
-| `pnpm astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `pnpm astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Check out [Starlight’s docs](https://starlight.astro.build/), read [the Astro documentation](https://docs.astro.build), or jump into the [Astro Discord server](https://astro.build/chat).
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for development setup.
