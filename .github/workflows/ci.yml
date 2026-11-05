@@ -95,7 +95,7 @@ jobs:
           node-version: "24"
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
 
       - name: Install Just
         uses: taiki-e/install-action@v2
