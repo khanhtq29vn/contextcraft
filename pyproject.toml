@@ -1,7 +1,7 @@
 [dependency-groups]
 dev = [
     "maturin>=1.16.0",
-    "prek>=0.5.9",
+    "prek>=0.5.10",
     "pyrefly>=1.4.0",
     "ruff>=0.14.0",
 ]
