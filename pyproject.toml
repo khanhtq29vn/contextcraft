@@ -2,7 +2,7 @@
 dev = [
     "maturin>=1.16.0",
     "prek>=0.5.9",
-    "pyrefly>=1.4.0",
+    "pyrefly>=1.4.1",
     "ruff>=0.14.0",
 ]
 
